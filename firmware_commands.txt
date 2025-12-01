@@ -1,0 +1,29 @@
+# ReSpeaker Lite Firmware Update - Copy these commands to your Pi
+
+# Step 2: Download USB Firmware
+mkdir -p ~/Downloads
+cd ~/Downloads
+wget -O respeaker_lite_usb_v2.0.7.bin https://github.com/respeaker/ReSpeaker_Lite/raw/master/xmos_firmwares/respeaker_lite_usb_v2.0.7.bin
+
+# Verify download
+ls -lh respeaker_lite_usb_v2.0.7.bin
+
+# Step 3: Enter DFU Mode (MANUAL - do these steps):
+# 1. Unplug USB cable from ReSpeaker
+# 2. Hold down button on ReSpeaker
+# 3. While holding, plug in USB cable
+# 4. Release button after 2-3 seconds
+
+# Check if in DFU mode:
+dfu-util -l
+# (Should show "XMOS DFU" or similar)
+
+# Step 4: Flash Firmware (run this AFTER device is in DFU mode)
+cd ~/Downloads
+sudo dfu-util -a 0 -D respeaker_lite_usb_v2.0.7.bin
+
+# Step 5: Unplug and replug device (MANUAL)
+
+# Step 6: Test
+cd ~/angleestimationbindiesel
+python3 test_stereo_recording.py
