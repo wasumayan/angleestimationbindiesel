@@ -6,8 +6,9 @@ This system enables your car to follow a person using a Raspberry Pi Camera Modu
 
 - **Person Detection & Tracking**: Uses MediaPipe or OpenCV to detect and track people
 - **Obstacle Avoidance**: Detects obstacles and finds safe paths
-- **Natural Language Commands**: Voice commands like "bin diesel, come here"
+- **Natural Language Commands**: Voice commands via ReSpeaker mic array + OpenAI LLM
 - **PSoC Integration**: Sends speed and direction commands to PSoC for car control
+- **OpenAI Integration**: Handles navigation commands, general queries, and "come here" functionality
 
 ## System Architecture
 
@@ -41,10 +42,48 @@ pip3 install -r requirements.txt
 
 Or install individually:
 ```bash
-pip3 install opencv-python opencv-contrib-python mediapipe SpeechRecognition
+pip3 install opencv-python opencv-contrib-python mediapipe SpeechRecognition openai python-dotenv
 ```
 
-### 3. Camera Setup
+### 3. Setup ReSpeaker Microphone
+
+The ReSpeaker Lite should be connected via USB. On Raspberry Pi 4, it will appear as a USB audio device.
+
+**Check ReSpeaker connection:**
+```bash
+# List audio devices
+arecord -l
+
+# Test recording
+arecord -d 5 -f cd test.wav
+aplay test.wav
+```
+
+**On Raspberry Pi 4 (ALSA):**
+The ReSpeaker should automatically appear as a USB audio device. The system will auto-detect it.
+
+**Troubleshooting:**
+- If ReSpeaker not detected: `lsusb` to check USB connection
+- Check ALSA: `aplay -l` and `arecord -l`
+- Permissions: `sudo usermod -a -G audio $USER` (logout/login)
+
+### 4. Setup OpenAI API Key
+
+**Option 1: Environment Variable**
+```bash
+export OPENAI_API_KEY='your-api-key-here'
+```
+
+**Option 2: .env File (Recommended)**
+```bash
+pip3 install python-dotenv
+cp .env.example .env
+# Edit .env and add your API key
+```
+
+The `.env` file is in `.gitignore` and won't be committed.
+
+### 5. Camera Setup
 
 Enable camera on Raspberry Pi:
 ```bash
@@ -55,6 +94,8 @@ sudo raspi-config
 Test camera:
 ```bash
 raspistill -o test.jpg
+# Or use test script
+python3 test_camera_basic.py
 ```
 
 ## Usage
@@ -81,12 +122,31 @@ python3 vision_main.py --port /dev/ttyUSB0 --camera 0 --wake-word "bin diesel"
 
 ## Voice Commands
 
-Say the wake word followed by a command:
+The system uses OpenAI to process natural language commands. Say the wake word followed by a command:
 
-- **"bin diesel, come here"** - Start following the person
+### Navigation Commands
+- **"bin diesel, come here"** - Follow the person and return to original spot
 - **"bin diesel, come to me"** - Start following
 - **"bin diesel, stop"** - Stop the car
-- **"bin diesel, follow"** - Start following mode
+- **"bin diesel, go forward"** - Move forward
+- **"bin diesel, turn left/right"** - Turn direction
+- **"bin diesel, slow down"** - Reduce speed
+- **"bin diesel, speed up"** - Increase speed
+
+### General Queries
+- **"bin diesel, what time is it?"** - Get current time
+- **"bin diesel, who's the president?"** - General knowledge queries
+
+### Main Functionality
+- **"bin diesel, come here"** - The car will:
+  1. Store its current position
+  2. Follow you while avoiding obstacles
+  3. Return to original position when done
+
+**Test voice commands:**
+```bash
+python3 test_respeaker_openai.py
+```
 
 ## Keyboard Controls
 
@@ -210,10 +270,18 @@ sudo usermod -a -G video $USER
 ### Speech Recognition Not Working
 - Check microphone: `arecord -l`
 - Test microphone: `arecord -d 5 test.wav && aplay test.wav`
-- For offline recognition, install Vosk:
+- Verify ReSpeaker is detected: `python3 test_respeaker_openai.py` (will list microphones)
+- Check OpenAI API key is set: `echo $OPENAI_API_KEY`
+- For offline recognition (optional), install Vosk:
   ```bash
   pip3 install vosk
   ```
+
+### OpenAI API Issues
+- Verify API key is set correctly
+- Check internet connection (OpenAI requires internet)
+- Test with: `python3 test_respeaker_openai.py`
+- Check API quota/limits on OpenAI dashboard
 
 ## Advanced: Using YOLO for Better Detection
 

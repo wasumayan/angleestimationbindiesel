@@ -134,6 +134,51 @@ class PSoCCommunicator:
             self.serial_connection.close()
             print("Disconnected from PSoC")
     
+    def send_navigation_command(self, angle: float, speed: float) -> bool:
+        """
+        Send navigation command with angle and speed
+        
+        Args:
+            angle: Steering angle in degrees (-90 to +90)
+            speed: Speed value (0.0 to 1.0)
+            
+        Returns:
+            True if send successful, False otherwise
+        """
+        if self.serial_connection is None or not self.serial_connection.is_open:
+            print("Error: Not connected to PSoC")
+            return False
+        
+        try:
+            angle = max(-90.0, min(90.0, angle))
+            speed = max(0.0, min(1.0, speed))
+            message = f"NAV:ANGLE:{angle:.2f}:SPEED:{speed:.2f}\n"
+            self.serial_connection.write(message.encode('ascii'))
+            self.serial_connection.flush()
+            return True
+        except Exception as e:
+            print(f"Error sending navigation command to PSoC: {e}")
+            return False
+    
+    def send_stop_command(self) -> bool:
+        """
+        Send stop command to PSoC
+        
+        Returns:
+            True if send successful, False otherwise
+        """
+        if self.serial_connection is None or not self.serial_connection.is_open:
+            return False
+        
+        try:
+            message = "NAV:STOP\n"
+            self.serial_connection.write(message.encode('ascii'))
+            self.serial_connection.flush()
+            return True
+        except Exception as e:
+            print(f"Error sending stop command to PSoC: {e}")
+            return False
+    
     def list_available_ports(self):
         """List available serial ports"""
         import serial.tools.list_ports

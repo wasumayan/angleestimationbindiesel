@@ -185,13 +185,26 @@ class SpeechRecognizer:
         intent = {
             'action': None,
             'target': None,
-            'direction': None
+            'direction': None,
+            'task': None
         }
         
-        # Parse common commands
-        if 'come here' in command or 'come to me' in command or 'follow' in command:
+        # Parse autonomous navigation commands
+        if 'come here' in command or 'come to me' in command or 'come' in command:
             intent['action'] = 'follow'
             intent['target'] = 'person'
+        elif 'pick up trash' in command or 'collect trash' in command or 'get trash' in command:
+            intent['action'] = 'pickup_trash'
+            intent['task'] = 'trash_collection'
+        elif 'return' in command and ('origin' in command or 'start' in command or 'original' in command):
+            intent['action'] = 'return'
+            intent['target'] = 'origin'
+        elif 'pick up' in command and 'return' in command:
+            # Combined task: pick up trash and return
+            intent['action'] = 'pickup_and_return'
+            intent['task'] = 'trash_collection'
+        
+        # Parse discrete movement commands
         elif 'stop' in command or 'halt' in command:
             intent['action'] = 'stop'
         elif 'go' in command or 'move' in command:
