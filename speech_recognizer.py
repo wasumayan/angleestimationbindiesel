@@ -3,7 +3,14 @@ Speech recognition for natural language commands
 Supports both online (Google) and offline (Vosk) recognition
 """
 
-import speech_recognition as sr
+try:
+    import speech_recognition as sr
+    SPEECH_RECOGNITION_AVAILABLE = True
+except ImportError:
+    SPEECH_RECOGNITION_AVAILABLE = False
+    print("Warning: speech_recognition not installed. Voice commands disabled.")
+    print("Install with: pip3 install SpeechRecognition")
+
 from typing import Optional, Callable
 import threading
 import queue
@@ -22,13 +29,23 @@ class SpeechRecognizer:
         """
         self.method = method
         self.wake_word = wake_word.lower()
-        self.recognizer = sr.Recognizer()
+        
+        if SPEECH_RECOGNITION_AVAILABLE:
+            self.recognizer = sr.Recognizer()
+        else:
+            self.recognizer = None
+            
         self.microphone = None
         self.is_listening = False
         self.command_queue = queue.Queue()
         self.callback: Optional[Callable[[str], None]] = None
         
         # Initialize microphone
+        if not SPEECH_RECOGNITION_AVAILABLE:
+            self.microphone = None
+            print("Speech recognition not available - voice commands disabled")
+            return
+            
         try:
             self.microphone = sr.Microphone()
             # Adjust for ambient noise
@@ -37,6 +54,7 @@ class SpeechRecognizer:
             print(f"Microphone initialized for speech recognition")
         except Exception as e:
             print(f"Warning: Could not initialize microphone: {e}")
+            self.microphone = None
     
     def recognize_command(self, audio) -> Optional[str]:
         """
@@ -48,6 +66,9 @@ class SpeechRecognizer:
         Returns:
             Recognized command text or None
         """
+        if not SPEECH_RECOGNITION_AVAILABLE or self.recognizer is None:
+            return None
+            
         try:
             if self.method == 'google':
                 text = self.recognizer.recognize_google(audio)
@@ -78,7 +99,7 @@ class SpeechRecognizer:
         Returns:
             True if wake word detected
         """
-        if self.microphone is None:
+        if not SPEECH_RECOGNITION_AVAILABLE or self.microphone is None:
             return False
         
         try:
@@ -105,7 +126,7 @@ class SpeechRecognizer:
         Returns:
             Command text or None
         """
-        if self.microphone is None:
+        if not SPEECH_RECOGNITION_AVAILABLE or self.microphone is None:
             return None
         
         try:
