@@ -61,7 +61,7 @@ class DirectionEstimator:
         return delay_samples, peak_value
     
     def estimate_angle(self, left_channel: np.ndarray, right_channel: np.ndarray,
-                      threshold: float = 0.3) -> Optional[float]:
+                      threshold: float = 0.0) -> Optional[float]:
         """
         Estimate angle of sound source relative to microphone array
         
