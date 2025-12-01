@@ -77,29 +77,24 @@ def list_microphones():
     print("Available Microphones:")
     print("=" * 70)
     
+    # List via speech_recognition (this may show warnings, but we need to see devices)
+    mic_list = sr.Microphone.list_microphone_names()
+    for i, name in enumerate(mic_list):
+        print(f"  {i}: {name}")
+    
+    # Also try PyAudio for more details
     try:
         import pyaudio
+        print("\nDetailed PyAudio device information:")
         p = pyaudio.PyAudio()
-        
-        print("\nDetailed device information:")
         for i in range(p.get_device_count()):
             info = p.get_device_info_by_index(i)
             if info['maxInputChannels'] > 0:  # It's an input device
                 print(f"  Index {i}: {info['name']}")
-                print(f"    Channels: {info['maxInputChannels']}")
-                print(f"    Sample Rate: {info['defaultSampleRate']}")
-                print(f"    Host API: {info['hostApi']}")
-                print()
-        
+                print(f"    Channels: {info['maxInputChannels']}, Sample Rate: {int(info['defaultSampleRate'])}")
         p.terminate()
     except Exception as e:
-        print(f"Could not get detailed info: {e}")
-    
-    # Also list via speech_recognition
-    mic_list = sr.Microphone.list_microphone_names()
-    print("Speech Recognition detected:")
-    for i, name in enumerate(mic_list):
-        print(f"  {i}: {name}")
+        print(f"\nCould not get PyAudio details: {e}")
     
     return mic_list
 

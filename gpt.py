@@ -55,8 +55,15 @@ def listen_for_command():
     global i
     with microphone as source:
         print("Listening for command...")
-        # audio = recognizer.listen(source)
-        audio = recognizer.listen(source, timeout=5, phrase_time_limit=5)
+        try:
+            # Increase timeout - waits for speech to START
+            # phrase_time_limit is max length of speech
+            audio = recognizer.listen(source, timeout=10, phrase_time_limit=10)
+        except sr.WaitTimeoutError:
+            print("No speech detected (timeout)")
+            i = i+1
+            return None
+        
         try:
             command = recognizer.recognize_google(audio)
             print(f"You said: {command}")
@@ -65,9 +72,11 @@ def listen_for_command():
         except sr.UnknownValueError:
             print("Could not understand the audio")
             i = i+1
+            return None
         except sr.RequestError as e:
             print(f"Could not request results; {e}")
             i = i+1
+            return None
 
 
 def get_gpt_response(prompt):
@@ -94,9 +103,10 @@ def main():
         while flag == True:
             user_input = listen_for_command()
             if i==3:
+                print("Too many failed attempts, returning to wake word listening")
                 flag = False
                 i = 0
-            if user_input:
+            elif user_input:
                 gpt_response = get_gpt_response(user_input)
                 print(f"GPT says: {gpt_response}")
                 text_to_speech(gpt_response)
