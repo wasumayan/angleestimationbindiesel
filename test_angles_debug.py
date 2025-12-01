@@ -1,7 +1,14 @@
+#!/usr/bin/env python3
+"""
+Debug version of test_angles.py with detailed diagnostics
+Shows what's happening at each step
+"""
+
 import time
 import numpy as np
 from audio_capture import ReSpeakerCapture
 from direction_estimator import DirectionEstimator
+
 
 def main():
     sample_rate = 16000
@@ -19,7 +26,7 @@ def main():
     angle_history = []
 
     print("\n" + "=" * 70)
-    print("ReSpeaker Angle Estimation Test")
+    print("DEBUG MODE: Showing detailed information")
     print("=" * 70)
     print("\nMove around the mics and clap / talk.")
     print("Positive angle = sound from the RIGHT")
@@ -36,64 +43,68 @@ def main():
             left, right = capture.read_chunk()
             chunk_count += 1
 
-            # Calculate delay manually for debugging
+            # Show audio levels
+            left_level = np.abs(left).max()
+            right_level = np.abs(right).max()
+            left_energy = np.mean(left ** 2)
+            right_energy = np.mean(right ** 2)
+
+            # Calculate correlation manually to see what's happening
             left_norm = left - np.mean(left)
             right_norm = right - np.mean(right)
             correlation = np.correlate(left_norm, right_norm, mode='full')
+            
             center = len(correlation) // 2
             max_delay = estimator.max_delay_samples
             search_range = slice(center - max_delay, center + max_delay + 1)
             correlation_window = correlation[search_range]
             peak_index = np.argmax(np.abs(correlation_window))
             delay_samples = peak_index - max_delay
+            peak_value = correlation_window[peak_index]
             
-            # Audio levels
-            left_level = np.abs(left).max()
-            right_level = np.abs(right).max()
+            # Normalize correlation
+            max_possible = np.sqrt(np.sum(left_norm**2) * np.sum(right_norm**2))
+            normalized_corr = abs(peak_value) / (max_possible + 1e-10)
 
-            # Raw angle estimate from this chunk (threshold=0.0 to see all angles)
+            # Raw angle estimate
             angle = estimator.estimate_angle(left, right, threshold=0.0)
 
             if delay_samples == 0:
                 zero_delay_count += 1
 
-            if angle is not None:
+            if angle is None:
+                none_count += 1
+            else:
                 angle_history.append(angle)
                 if len(angle_history) > history_size:
                     angle_history.pop(0)
 
                 smoothed = estimator.smooth_angle(angle_history)
 
-                # Show detailed info
-                if smoothed is not None:
-                    print(f"Chunk {chunk_count:4d} | "
-                          f"Delay: {delay_samples:4d} | "
-                          f"Levels: L={left_level:.3f} R={right_level:.3f} | "
-                          f"Raw: {angle:7.2f}° | Smoothed: {smoothed:7.2f}°")
-                else:
-                    print(f"Chunk {chunk_count:4d} | "
-                          f"Delay: {delay_samples:4d} | "
-                          f"Levels: L={left_level:.3f} R={right_level:.3f} | "
-                          f"Raw: {angle:7.2f}° | Smoothed: N/A")
-            else:
-                none_count += 1
-                print(f"Chunk {chunk_count:4d} | "
-                      f"Delay: {delay_samples:4d} | "
+                # Print detailed info every chunk
+                status = "✓" if angle is not None else "✗"
+                print(f"{status} Chunk {chunk_count:4d} | "
+                      f"Delay: {delay_samples:4d} samples | "
+                      f"Corr: {normalized_corr:.4f} | "
                       f"Levels: L={left_level:.3f} R={right_level:.3f} | "
-                      f"Angle: None (below threshold)")
+                      f"Raw: {angle:7.2f}°" if angle is not None else f"Raw: None",
+                      end="")
+                
+                if smoothed is not None:
+                    print(f" | Smoothed: {smoothed:7.2f}°")
+                else:
+                    print(" | Smoothed: N/A")
 
             # Show statistics every 50 chunks
             if chunk_count % 50 == 0:
                 print("\n" + "-" * 70)
-                print(f"Statistics (last 50 chunks):")
-                print(f"  Zero delay: {zero_delay_count} ({100*zero_delay_count/50:.1f}%)")
-                print(f"  None angles: {none_count} ({100*none_count/50:.1f}%)")
+                print(f"Statistics after {chunk_count} chunks:")
+                print(f"  Zero delay chunks: {zero_delay_count} ({100*zero_delay_count/chunk_count:.1f}%)")
+                print(f"  None angles: {none_count} ({100*none_count/chunk_count:.1f}%)")
                 if angle_history:
-                    recent = angle_history[-10:] if len(angle_history) >= 10 else angle_history
-                    print(f"  Recent angle range: {np.min(recent):.2f}° to {np.max(recent):.2f}°")
+                    print(f"  Angle range: {np.min(angle_history):.2f}° to {np.max(angle_history):.2f}°")
+                    print(f"  Angle mean: {np.mean(angle_history):.2f}°")
                 print("-" * 70 + "\n")
-                zero_delay_count = 0
-                none_count = 0
 
             # Don't spam too fast
             time.sleep(0.1)
@@ -102,23 +113,22 @@ def main():
         print("\n" + "=" * 70)
         print("Final Statistics:")
         print("=" * 70)
-        print(f"Total chunks processed: {chunk_count}")
+        print(f"Total chunks: {chunk_count}")
         print(f"Zero delay chunks: {zero_delay_count} ({100*zero_delay_count/chunk_count:.1f}%)")
         print(f"None angles: {none_count} ({100*none_count/chunk_count:.1f}%)")
         
-        if chunk_count > 0 and zero_delay_count / chunk_count > 0.8:
-            print("\n⚠️  DIAGNOSIS: Most chunks show zero delay!")
-            print("   This means both microphones are receiving sound at the same time.")
-            print("\n   Possible causes:")
-            print("   1. Sound source is directly in front (0°) - this is normal")
+        if zero_delay_count / chunk_count > 0.9:
+            print("\n⚠️  DIAGNOSIS: Most chunks have zero delay!")
+            print("   This means both microphones are receiving the same signal.")
+            print("   Possible causes:")
+            print("   1. Sound source is directly in front (0°)")
             print("   2. Microphones are too close together")
-            print("   3. Microphone spacing constant (0.04m) may be incorrect")
-            print("   4. Room acoustics causing reflections")
+            print("   3. Room acoustics causing reflections")
+            print("   4. Microphone spacing constant (0.04m) may be wrong")
             print("\n   Try:")
-            print("   - Speaking from the SIDE (left or right of the array)")
+            print("   - Speaking from the SIDE (left or right)")
             print("   - Clapping from different angles")
-            print("   - Moving the sound source in a circle around the mics")
-            print("   - If delay is ALWAYS 0, check microphone spacing constant")
+            print("   - Moving the sound source around")
         
         if angle_history:
             print(f"\nAngle statistics:")
@@ -127,8 +137,9 @@ def main():
             print(f"  Mean: {np.mean(angle_history):.2f}°")
             print(f"  Std Dev: {np.std(angle_history):.2f}°")
         
-        print("\nStopping...")
         capture.cleanup()
+
 
 if __name__ == "__main__":
     main()
+

@@ -33,8 +33,9 @@ class DirectionControlSystem:
         self.update_interval = 1.0 / update_rate
 
         # Initialize components
+        # ReSpeaker Lite has 7cm (0.07m) microphone spacing
         self.audio_capture = ReSpeakerCapture(sample_rate=sample_rate)
-        self.direction_estimator = DirectionEstimator(sample_rate=sample_rate)
+        self.direction_estimator = DirectionEstimator(sample_rate=sample_rate, mic_spacing=0.07)
         self.psoc_communicator = PSoCCommunicator(
             port=psoc_port, baudrate=psoc_baudrate
         )
