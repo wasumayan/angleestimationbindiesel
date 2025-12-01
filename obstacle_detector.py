@@ -49,7 +49,7 @@ class ObstacleDetector:
         
     def detect_obstacles_depth(self, frame: np.ndarray) -> List[Tuple[int, int, float]]:
         """
-        Detect obstacles using depth estimation
+        Detect obstacles using enhanced edge detection and size estimation
         
         Args:
             frame: Camera frame
@@ -65,11 +65,28 @@ class ObstacleDetector:
         roi_y = int(h * (1 - self.detection_zone_height))
         roi = gray[roi_y:, :]
         
-        # Edge detection to find potential obstacles
-        edges = cv2.Canny(roi, 50, 150)
+        # Enhanced preprocessing
+        # Gaussian blur to reduce noise
+        blurred = cv2.GaussianBlur(roi, (5, 5), 0)
+        
+        # Adaptive threshold for better edge detection in varying lighting
+        thresh = cv2.adaptiveThreshold(
+            blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+            cv2.THRESH_BINARY_INV, 11, 2
+        )
+        
+        # Morphological operations to clean up
+        kernel = np.ones((3, 3), np.uint8)
+        cleaned = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
+        
+        # Edge detection
+        edges = cv2.Canny(cleaned, 50, 150)
+        
+        # Dilate edges to connect nearby edges
+        dilated = cv2.dilate(edges, kernel, iterations=2)
         
         # Find contours
-        contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        contours, _ = cv2.findContours(dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         
         obstacles = []
         for contour in contours:
@@ -81,10 +98,14 @@ class ObstacleDetector:
                 # Adjust y coordinate for ROI offset
                 y += roi_y
                 
-                # Estimate distance based on size (larger = closer)
-                # This is a rough approximation
+                # Enhanced distance estimation
+                # Larger objects and objects lower in frame are closer
                 size = max(w_box, h_box)
-                estimated_distance = 2.0 / (size / 100.0 + 0.1)  # Rough calibration
+                y_position_factor = (h - y) / h  # Lower in frame = closer
+                
+                # Combine size and position for better distance estimate
+                estimated_distance = (2.0 / (size / 100.0 + 0.1)) * (1.0 / (y_position_factor + 0.1))
+                estimated_distance = max(0.1, min(5.0, estimated_distance))  # Clamp to reasonable range
                 
                 # Center of obstacle
                 center_x = x + w_box // 2

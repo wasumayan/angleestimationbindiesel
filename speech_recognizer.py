@@ -49,13 +49,31 @@ class SpeechRecognizer:
             return
             
         try:
-            # Use default system microphone (separate from ReSpeaker I2S)
-            # This could be: built-in Pi mic, USB mic, or any other input device
-            self.microphone = sr.Microphone()
+            # Try to find ReSpeaker microphone
+            mic_index = None
+            if SPEECH_RECOGNITION_AVAILABLE:
+                try:
+                    mic_list = sr.Microphone.list_microphone_names()
+                    for i, name in enumerate(mic_list):
+                        if 'respeaker' in name.lower() or 'seeed' in name.lower():
+                            mic_index = i
+                            print(f"Found ReSpeaker at index {i}: {name}")
+                            break
+                except:
+                    pass
+            
+            # Use ReSpeaker if found, otherwise use default
+            if mic_index is not None:
+                self.microphone = sr.Microphone(device_index=mic_index)
+                print(f"Using ReSpeaker for voice commands")
+            else:
+                self.microphone = sr.Microphone()
+                print(f"Using default microphone for voice commands")
+            
             # Adjust for ambient noise
             with self.microphone as source:
                 self.recognizer.adjust_for_ambient_noise(source, duration=1)
-            print(f"Microphone initialized for speech recognition (separate from ReSpeaker I2S)")
+            print(f"Microphone initialized for speech recognition")
         except Exception as e:
             print(f"Warning: Could not initialize microphone: {e}")
             print("Voice commands will be disabled, but you can use keyboard controls")
