@@ -16,17 +16,24 @@ echo "Installing system packages..."
 sudo apt-get install -y \
     python3-pip \
     python3-opencv \
-    python3-opencv-contrib \
     libopencv-dev \
     portaudio19-dev \
     python3-pyaudio \
     python3-numpy \
-    python3-serial
+    python3-serial \
+    python3-speechrecognition
 
-# Install Python packages from requirements.txt
+# Try to install opencv-contrib if available (optional)
+echo ""
+echo "Attempting to install python3-opencv-contrib (optional)..."
+sudo apt-get install -y python3-opencv-contrib 2>/dev/null || echo "  python3-opencv-contrib not available, skipping..."
+
+# Install Python packages from requirements.txt using --break-system-packages
+# (Required for newer Python versions with externally-managed-environment)
 echo ""
 echo "Installing Python packages from requirements.txt..."
-pip3 install -r requirements.txt
+echo "Note: Using --break-system-packages flag for system-wide installation"
+pip3 install --break-system-packages -r requirements.txt
 
 # Optional: Install librosa for better wake word detection
 echo ""
@@ -35,7 +42,7 @@ echo
 if [[ $REPLY =~ ^[Yy]$ ]]
 then
     echo "Installing librosa..."
-    pip3 install librosa
+    pip3 install --break-system-packages librosa
 else
     echo "Skipping librosa (will use simple audio comparison)"
 fi
