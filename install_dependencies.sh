@@ -20,7 +20,9 @@ sudo apt-get install -y \
     portaudio19-dev \
     python3-pyaudio \
     python3-numpy \
-    python3-serial
+    python3-serial \
+    libcamera-apps \
+    v4l-utils
 
 # Try to install opencv-contrib if available (optional)
 echo ""
@@ -48,6 +50,27 @@ else
     echo "Adding user to video group..."
     sudo usermod -a -G video $USER
     echo "⚠ You may need to logout and login again for camera permissions to take effect"
+fi
+
+# Verify libcamera setup
+echo ""
+echo "Verifying libcamera setup..."
+if command -v libcamera-hello &> /dev/null; then
+    echo "✓ libcamera is installed"
+    echo "  Test camera with: libcamera-hello"
+else
+    echo "⚠ libcamera-apps not found, but OpenCV should still work with V4L2"
+fi
+
+# Check for video devices
+echo ""
+echo "Checking for video devices..."
+if ls /dev/video* 1> /dev/null 2>&1; then
+    echo "✓ Video devices found:"
+    ls -l /dev/video*
+else
+    echo "⚠ No video devices found. Make sure camera is connected and enabled."
+    echo "  Enable camera: sudo raspi-config → Interface Options → Camera → Enable"
 fi
 
 # Check audio permissions

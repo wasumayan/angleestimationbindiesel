@@ -70,16 +70,37 @@ class ColorFlagDetector:
         }
     
     def start_camera(self, width=640, height=480):
-        """Initialize camera"""
-        self.cap = cv2.VideoCapture(self.camera_index)
-        if not self.cap.isOpened():
-            print(f"[DEBUG] Error: Could not open camera {self.camera_index}")
-            return False
+        """Initialize camera using libcamera (via V4L2 backend)"""
+        # Try V4L2 backend first (works with libcamera on Raspberry Pi)
+        backends_to_try = []
+        if hasattr(cv2, 'CAP_V4L2'):
+            backends_to_try.append((cv2.CAP_V4L2, "V4L2 (libcamera)"))
+        backends_to_try.append((cv2.CAP_ANY, "ANY (auto-detect)"))
         
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
-        print(f"[DEBUG] Camera started: {width}x{height}")
-        return True
+        for backend_id, backend_name in backends_to_try:
+            try:
+                self.cap = cv2.VideoCapture(self.camera_index, backend_id)
+                if self.cap.isOpened():
+                    # Test if we can read a frame
+                    ret, test_frame = self.cap.read()
+                    if ret and test_frame is not None:
+                        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+                        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+                        actual_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                        actual_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                        print(f"[DEBUG] Camera started with {backend_name}: {actual_width}x{actual_height}")
+                        return True
+                    else:
+                        self.cap.release()
+                        self.cap = None
+            except Exception as e:
+                print(f"[DEBUG] Error with {backend_name}: {e}")
+                if self.cap:
+                    self.cap.release()
+                    self.cap = None
+        
+        print(f"[DEBUG] Error: Could not open camera {self.camera_index} with any backend")
+        return False
     
     def detect_flag(self):
         """

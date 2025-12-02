@@ -23,13 +23,31 @@ chmod +x install_dependencies.sh
 Or install manually:
 
 ```bash
-# System packages
+# System packages (includes libcamera support)
 sudo apt-get update
 sudo apt-get install -y python3-pip python3-opencv libopencv-dev \
-    portaudio19-dev python3-pyaudio python3-numpy python3-serial
+    portaudio19-dev python3-pyaudio python3-numpy python3-serial \
+    libcamera-apps v4l-utils
 
 # Python packages
 pip3 install --break-system-packages -r requirements.txt
+```
+
+### 1.5. Enable Camera (Raspberry Pi)
+
+Enable the camera interface:
+
+```bash
+sudo raspi-config
+# Navigate to: Interface Options → Camera → Enable
+# Reboot after enabling
+```
+
+Test libcamera:
+
+```bash
+libcamera-hello
+# Should show camera preview for 5 seconds
 ```
 
 ### 2. Get Picovoice AccessKey
@@ -112,9 +130,12 @@ export PICOVOICE_ACCESS_KEY='your-key-here'
 ### "Could not open camera"
 
 **Solutions**:
-1. Enable camera: `sudo raspi-config` → Interface Options → Camera → Enable
-2. Check permissions: `sudo usermod -a -G video $USER` (then logout/login)
-3. Check camera: `ls /dev/video*`
+1. Enable camera: `sudo raspi-config` → Interface Options → Camera → Enable (then reboot)
+2. Test libcamera: `libcamera-hello` (should show preview)
+3. Check permissions: `sudo usermod -a -G video $USER` (then logout/login)
+4. Check video devices: `ls /dev/video*` (should show /dev/video0 or similar)
+5. Check camera detection: `vcgencmd get_camera` (should show supported=1 detected=1)
+6. Verify libcamera: `libcamera-hello --list-cameras` (lists available cameras)
 
 ### "Error opening microphone"
 

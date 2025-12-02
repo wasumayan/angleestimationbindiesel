@@ -42,12 +42,18 @@ pip3 install -r requirements.txt
 pip3 install librosa
 ```
 
-### 2. Enable Camera
+### 2. Enable Camera (Raspberry Pi)
 
 ```bash
 sudo raspi-config
 # Interface Options → Camera → Enable
+# Reboot after enabling
+
+# Test libcamera (should show preview)
+libcamera-hello
 ```
+
+The system uses **libcamera** (via V4L2 backend) for camera access, which is the modern camera stack for Raspberry Pi. See [libcamera documentation](https://github.com/raspberrypi/libcamera) for more details.
 
 ### 3. Set Up Wake Word (Using Picovoice Porcupine)
 
