@@ -20,8 +20,7 @@ sudo apt-get install -y \
     portaudio19-dev \
     python3-pyaudio \
     python3-numpy \
-    python3-serial \
-    python3-speechrecognition
+    python3-serial
 
 # Try to install opencv-contrib if available (optional)
 echo ""
@@ -35,17 +34,10 @@ echo "Installing Python packages from requirements.txt..."
 echo "Note: Using --break-system-packages flag for system-wide installation"
 pip3 install --break-system-packages -r requirements.txt
 
-# Optional: Install librosa for better wake word detection
+# Note: Picovoice Porcupine will be installed from requirements.txt
 echo ""
-read -p "Install librosa for better wake word detection? (y/n) " -n 1 -r
-echo
-if [[ $REPLY =~ ^[Yy]$ ]]
-then
-    echo "Installing librosa..."
-    pip3 install --break-system-packages librosa
-else
-    echo "Skipping librosa (will use simple audio comparison)"
-fi
+echo "Note: Picovoice Porcupine (pvporcupine) will be installed from requirements.txt"
+echo "You'll need a Picovoice AccessKey from https://console.picovoice.ai/"
 
 # Check camera permissions
 echo ""

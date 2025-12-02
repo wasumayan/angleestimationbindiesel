@@ -1,16 +1,13 @@
 numpy>=1.21.0
 pyaudio>=0.2.11
 pyserial>=3.5
-SpeechRecognition>=3.10.0
-openai>=1.0.0
-python-dotenv>=1.0.0
+pvporcupine>=3.0.0
 
 # OpenCV - install via system package (recommended):
 # sudo apt-get install python3-opencv python3-opencv-contrib
 
-# MediaPipe - optional (system falls back to OpenCV HOG if not available):
-# pip3 install mediapipe
-
-# librosa - optional (for better audio comparison, falls back to simple comparison if not available):
-# pip3 install librosa
+# Optional packages:
+# openai>=1.0.0  # For full vision system (not needed for bindieselsimple.py)
+# python-dotenv>=1.0.0  # For environment variables
+# mediapipe  # For person detection (alternative to OpenCV)
 

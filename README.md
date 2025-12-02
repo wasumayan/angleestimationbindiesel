@@ -49,19 +49,19 @@ sudo raspi-config
 # Interface Options → Camera → Enable
 ```
 
-### 3. Set Up Wake Word (NEW - Simple Implementation)
+### 3. Set Up Wake Word (Using Picovoice Porcupine)
 
-The simple implementation (`bindieselsimple.py`) uses audio file comparison instead of Google Speech Recognition:
+The simple implementation (`bindieselsimple.py`) uses Picovoice Porcupine for professional wake word detection:
 
 ```bash
-# Record your wake word (e.g., "bin diesel")
-python3 record_wake_word.py
+# Get your free AccessKey from https://console.picovoice.ai/
+export PICOVOICE_ACCESS_KEY='your-access-key-here'
 
 # Run the simple implementation
 python3 bindieselsimple.py
 ```
 
-See [SETUP_WAKE_WORD.md](SETUP_WAKE_WORD.md) for detailed instructions.
+See [SETUP.md](SETUP.md) for detailed instructions.
 
 ### 4. Run System
 
@@ -112,8 +112,8 @@ Say the wake word followed by a command:
 ```
 .
 ├── bindieselsimple.py          # Simple implementation (wake word + flag detection)
-├── record_wake_word.py         # Record wake word reference audio
 ├── camerasimple.py             # Camera test with color flag detection
+├── SETUP.md                    # Setup guide for simple implementation
 ├── vision_main.py              # Main entry point (full system)
 ├── vision_navigator.py         # Navigation controller
 ├── vision_person_tracker.py    # Person detection & tracking
