@@ -22,6 +22,15 @@ except ImportError:
     print("Install with: pip3 install --break-system-packages ultralytics")
     sys.exit(1)
 
+# Try to import MediaPipe for pose detection
+try:
+    import mediapipe as mp
+    MEDIAPIPE_AVAILABLE = True
+except ImportError:
+    MEDIAPIPE_AVAILABLE = False
+    print("[WARNING] MediaPipe not installed - gesture detection will be disabled")
+    print("Install with: pip3 install --break-system-packages mediapipe")
+
 
 # Configuration
 DISPLAY_WIDTH = 1280
@@ -162,6 +171,110 @@ class ColorDetector:
         return angle
 
 
+def calculate_angle_between_points(p1, p2, p3):
+    """
+    Calculate angle between three points (p2 is the vertex)
+    
+    Args:
+        p1, p2, p3: (x, y) tuples
+        
+    Returns:
+        Angle in degrees
+    """
+    import math
+    
+    # Vector from p2 to p1
+    v1 = (p1[0] - p2[0], p1[1] - p2[1])
+    # Vector from p2 to p3
+    v2 = (p3[0] - p2[0], p3[1] - p2[1])
+    
+    # Calculate dot product and magnitudes
+    dot_product = v1[0] * v2[0] + v1[1] * v2[1]
+    mag1 = math.sqrt(v1[0]**2 + v1[1]**2)
+    mag2 = math.sqrt(v2[0]**2 + v2[1]**2)
+    
+    if mag1 == 0 or mag2 == 0:
+        return None
+    
+    # Calculate angle in radians, then convert to degrees
+    cos_angle = dot_product / (mag1 * mag2)
+    cos_angle = max(-1.0, min(1.0, cos_angle))  # Clamp to valid range
+    angle_rad = math.acos(cos_angle)
+    angle_deg = math.degrees(angle_rad)
+    
+    return angle_deg
+
+
+def detect_arm_raised(landmarks, image_width, image_height):
+    """
+    Detect if a person has raised their arm to the side at ~90 degrees
+    
+    Args:
+        landmarks: MediaPipe pose landmarks
+        image_width: Width of image
+        image_height: Height of image
+        
+    Returns:
+        (left_raised, right_raised, left_angle, right_angle) tuple
+        where raised is True/False, angle is in degrees or None
+    """
+    if not MEDIAPIPE_AVAILABLE or landmarks is None:
+        return (False, False, None, None)
+    
+    # MediaPipe pose landmark indices
+    LEFT_SHOULDER = 11
+    LEFT_ELBOW = 13
+    LEFT_WRIST = 15
+    RIGHT_SHOULDER = 12
+    RIGHT_ELBOW = 14
+    RIGHT_WRIST = 16
+    
+    def get_landmark_point(idx):
+        if idx < len(landmarks.landmark):
+            lm = landmarks.landmark[idx]
+            return (int(lm.x * image_width), int(lm.y * image_height))
+        return None
+    
+    left_raised = False
+    right_raised = False
+    left_angle = None
+    right_angle = None
+    
+    # Check left arm
+    left_shoulder = get_landmark_point(LEFT_SHOULDER)
+    left_elbow = get_landmark_point(LEFT_ELBOW)
+    left_wrist = get_landmark_point(LEFT_WRIST)
+    
+    if left_shoulder and left_elbow and left_wrist:
+        left_angle = calculate_angle_between_points(
+            left_shoulder, left_elbow, left_wrist
+        )
+        # Arm is raised if angle is between 70-110 degrees (approximately 90)
+        if left_angle is not None and 70 <= left_angle <= 110:
+            # Also check if wrist is to the side (x coordinate of wrist > elbow)
+            if left_wrist[0] > left_elbow[0]:  # Wrist is to the right of elbow
+                left_raised = True
+    
+    # Check right arm
+    right_shoulder = get_landmark_point(RIGHT_SHOULDER)
+    right_elbow = get_landmark_point(RIGHT_ELBOW)
+    right_wrist = get_landmark_point(RIGHT_WRIST)
+    
+    if right_shoulder and right_elbow and right_wrist:
+        right_angle = calculate_angle_between_points(
+            right_shoulder, right_elbow, right_wrist
+        )
+        # Arm is raised if angle is between 70-110 degrees (approximately 90)
+        if right_angle is not None and 70 <= right_angle <= 110:
+            # Also check if wrist is to the side (x coordinate of wrist < elbow)
+            if right_wrist[0] < right_elbow[0]:  # Wrist is to the left of elbow
+                right_raised = True
+    
+    return (left_raised, right_raised, left_angle, right_angle)
+
+
+
+
 def draw_color_detection(frame, color_data, angle, color_name, frame_width):
     """
     Draw color detection overlay on frame
@@ -239,6 +352,8 @@ def main():
                        help='Minimum area for color detection (default: 500)')
     parser.add_argument('--no-fps', action='store_true',
                        help='Hide FPS counter')
+    parser.add_argument('--no-gesture', action='store_true',
+                       help='Disable gesture detection (if MediaPipe is installed)')
     
     args = parser.parse_args()
     
@@ -261,6 +376,22 @@ def main():
         horizontal_fov=HORIZONTAL_FOV,
         min_area=args.min_area
     )
+    
+    # Initialize MediaPipe Pose if available
+    pose_detector = None
+    if MEDIAPIPE_AVAILABLE and not args.no_gesture:
+        print("[DEBUG] Initializing MediaPipe Pose...")
+        mp_pose = mp.solutions.pose
+        pose_detector = mp_pose.Pose(
+            static_image_mode=False,
+            model_complexity=1,  # 0=light, 1=medium, 2=heavy (use 1 for balance)
+            enable_segmentation=False,
+            min_detection_confidence=0.5,
+            min_tracking_confidence=0.5
+        )
+        print("[DEBUG] MediaPipe Pose initialized")
+    else:
+        print("[DEBUG] MediaPipe not available - gesture detection disabled")
     
     # Initialize picamera2
     print("[DEBUG] Initializing picamera2 (Camera Module 3 Wide)...")
@@ -314,6 +445,74 @@ def main():
             # Get YOLO annotated frame (with object detections drawn)
             annotated_frame = yolo_results[0].plot()
             
+            # Run gesture detection on detected persons
+            person_boxes = []
+            gesture_detections = []
+            
+            if MEDIAPIPE_AVAILABLE and pose_detector:
+                # Find person class ID
+                person_class_id = None
+                for class_id, class_name in yolo_model.names.items():
+                    if class_name == 'person':
+                        person_class_id = class_id
+                        break
+                
+                if person_class_id is not None:
+                    # Run MediaPipe pose on entire frame (more efficient)
+                    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    full_pose_result = pose_detector.process(frame_rgb)
+                    
+                    # Find all person detections from YOLO
+                    for box in yolo_results[0].boxes:
+                        if int(box.cls[0]) == person_class_id:
+                            # Get bounding box coordinates
+                            x1, y1, x2, y2 = map(int, box.xyxy[0].cpu().numpy())
+                            person_boxes.append((x1, y1, x2, y2))
+                            
+                            # Check if pose landmarks are within this person's bounding box
+                            if full_pose_result.pose_landmarks:
+                                # Check if any key landmarks (shoulders) are in this person's box
+                                left_shoulder = full_pose_result.pose_landmarks.landmark[11]
+                                right_shoulder = full_pose_result.pose_landmarks.landmark[12]
+                                
+                                ls_x, ls_y = int(left_shoulder.x * frame_width), int(left_shoulder.y * frame.shape[0])
+                                rs_x, rs_y = int(right_shoulder.x * frame_width), int(right_shoulder.y * frame.shape[0])
+                                
+                                # If either shoulder is in the person's bounding box, use this pose
+                                if ((x1 <= ls_x <= x2 and y1 <= ls_y <= y2) or 
+                                    (x1 <= rs_x <= x2 and y1 <= rs_y <= y2)):
+                                    # Detect arm raised for this person
+                                    left_raised, right_raised, left_angle, right_angle = detect_arm_raised(
+                                        full_pose_result.pose_landmarks, frame_width, frame.shape[0]
+                                    )
+                                    gesture_detections.append((left_raised, right_raised, left_angle, right_angle))
+                                else:
+                                    gesture_detections.append((False, False, None, None))
+                            else:
+                                gesture_detections.append((False, False, None, None))
+            
+            # Draw gesture detection
+            if MEDIAPIPE_AVAILABLE and person_boxes:
+                for i, person_box in enumerate(person_boxes):
+                    if i < len(gesture_detections):
+                        left_raised, right_raised, left_angle, right_angle = gesture_detections[i]
+                        x1, y1, x2, y2 = person_box
+                        
+                        if left_raised or right_raised:
+                            # Draw green box around person with raised arm
+                            cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (0, 255, 0), 3)
+                            
+                            gesture_text = "ARM RAISED!"
+                            if left_raised and right_raised:
+                                gesture_text = "BOTH ARMS RAISED!"
+                            elif left_raised:
+                                gesture_text = f"LEFT ARM RAISED! ({left_angle:.0f}°)"
+                            elif right_raised:
+                                gesture_text = f"RIGHT ARM RAISED! ({right_angle:.0f}°)"
+                            
+                            cv2.putText(annotated_frame, gesture_text, (x1, y1 - 10),
+                                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+            
             # Detect colored flag/block
             color_data = color_detector.detect_color(frame)
             
@@ -337,8 +536,17 @@ def main():
                 yolo_count = len(yolo_results[0].boxes)
                 color_status = "DETECTED" if color_data is not None else "NOT DETECTED"
                 
+                # Count gesture detections
+                gesture_count = 0
+                if MEDIAPIPE_AVAILABLE and gesture_detections:
+                    for left_raised, right_raised, _, _ in gesture_detections:
+                        if left_raised or right_raised:
+                            gesture_count += 1
+                
+                gesture_text = f" | Gestures: {gesture_count}" if MEDIAPIPE_AVAILABLE else ""
+                
                 print(f"[Frame {counter}] YOLO: {yolo_count} objects | "
-                      f"Color ({color_detector.color.upper()}): {color_status} | "
+                      f"Color ({color_detector.color.upper()}): {color_status}{gesture_text} | "
                       f"FPS: {fps:.1f}")
                 
                 if yolo_count > 0:
