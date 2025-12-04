@@ -10,6 +10,11 @@ import numpy as np
 import os
 import sys
 
+# Suppress ALSA warnings (they're harmless but noisy)
+os.environ['PYTHONWARNINGS'] = 'ignore'
+import warnings
+warnings.filterwarnings('ignore')
+
 
 def test_wake_word():
     """Test wake word detection"""
@@ -64,27 +69,94 @@ def test_wake_word():
         
         # List available audio input devices
         print("\nAvailable audio input devices:")
-        for i in range(audio.get_device_count()):
-            info = audio.get_device_info_by_index(i)
-            if info['maxInputChannels'] > 0:
-                print(f"  [{i}] {info['name']} - {info['maxInputChannels']} channels")
+        input_devices = []
+        default_input = None
+        try:
+            default_input = audio.get_default_input_device_info()
+            print(f"  [DEFAULT] {default_input['name']} (index: {default_input['index']})")
+        except:
+            print("  [DEFAULT] No default input device found")
         
-        # Open audio stream
-        stream = audio.open(
-            rate=porcupine.sample_rate,
-            channels=1,
-            format=pyaudio.paInt16,
-            input=True,
-            frames_per_buffer=porcupine.frame_length
-        )
-        print(f"✓ Audio stream opened")
-        print(f"  Using default input device")
+        for i in range(audio.get_device_count()):
+            try:
+                info = audio.get_device_info_by_index(i)
+                if info['maxInputChannels'] > 0:
+                    input_devices.append((i, info))
+                    marker = " ← DEFAULT" if default_input and i == default_input['index'] else ""
+                    print(f"  [{i}] {info['name']} - {info['maxInputChannels']} channels{marker}")
+            except:
+                pass
+        
+        if not input_devices:
+            print("✗ No audio input devices found!")
+            print("\nTroubleshooting:")
+            print("1. Check microphone is connected: lsusb")
+            print("2. Check audio devices: arecord -l")
+            print("3. Check permissions: sudo usermod -a -G audio $USER (then logout/login)")
+            audio.terminate()
+            porcupine.delete()
+            return False
+        
+        # Try to open audio stream
+        device_index = None
+        if default_input:
+            device_index = default_input['index']
+        
+        # If no default, try first available input device
+        if device_index is None and input_devices:
+            device_index = input_devices[0][0]
+            print(f"\n[DEBUG] No default device, using device index {device_index}")
+        
+        try:
+            stream = audio.open(
+                rate=porcupine.sample_rate,
+                channels=1,
+                format=pyaudio.paInt16,
+                input=True,
+                input_device_index=device_index,
+                frames_per_buffer=porcupine.frame_length
+            )
+            device_name = input_devices[0][1]['name'] if input_devices else "Unknown"
+            print(f"✓ Audio stream opened")
+            print(f"  Using device [{device_index}]: {device_name}")
+        except Exception as stream_error:
+            print(f"✗ Error opening audio stream: {stream_error}")
+            print("\nTrying to find working device...")
+            # Try each input device
+            stream = None
+            for dev_idx, dev_info in input_devices:
+                try:
+                    stream = audio.open(
+                        rate=porcupine.sample_rate,
+                        channels=1,
+                        format=pyaudio.paInt16,
+                        input=True,
+                        input_device_index=dev_idx,
+                        frames_per_buffer=porcupine.frame_length
+                    )
+                    print(f"✓ Audio stream opened with device [{dev_idx}]: {dev_info['name']}")
+                    break
+                except:
+                    continue
+            
+            if stream is None:
+                print("✗ Could not open any audio input device")
+                print("\nTroubleshooting:")
+                print("1. Check microphone is connected: lsusb")
+                print("2. Check audio devices: arecord -l")
+                print("3. Test microphone: arecord -d 5 test.wav && aplay test.wav")
+                print("4. Check permissions: sudo usermod -a -G audio $USER (then logout/login)")
+                audio.terminate()
+                porcupine.delete()
+                return False
+                
     except Exception as e:
         print(f"✗ Error initializing audio: {e}")
         print("\nTroubleshooting:")
-        print("1. Check microphone is connected")
-        print("2. Check permissions: sudo usermod -a -G audio $USER (then logout/login)")
-        print("3. Test microphone: arecord -d 5 test.wav && aplay test.wav")
+        print("1. Check microphone is connected: lsusb")
+        print("2. Check audio devices: arecord -l")
+        print("3. Check permissions: sudo usermod -a -G audio $USER (then logout/login)")
+        print("4. Test microphone: arecord -d 5 test.wav && aplay test.wav")
         porcupine.delete()
         return False
     
