@@ -10,6 +10,14 @@ import numpy as np
 import os
 import sys
 
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    print("[DEBUG] python-dotenv not installed, .env file won't be loaded automatically")
+    print("Install with: pip3 install --break-system-packages python-dotenv")
+
 # Suppress ALSA warnings (they're harmless but noisy)
 os.environ['PYTHONWARNINGS'] = 'ignore'
 import warnings

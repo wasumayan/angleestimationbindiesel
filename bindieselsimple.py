@@ -34,6 +34,14 @@ import time
 import os
 from psoc_communicator import PSoCCommunicator
 
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    print("[DEBUG] python-dotenv not installed, .env file won't be loaded automatically")
+    print("Install with: pip3 install --break-system-packages python-dotenv")
+
 
 class ColorFlagDetector:
     """Detects colored flag in camera frame"""

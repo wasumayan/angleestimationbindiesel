@@ -6,8 +6,10 @@ pvporcupine>=3.0.0
 # OpenCV - install via system package (recommended):
 # sudo apt-get install python3-opencv python3-opencv-contrib
 
+# Required for loading .env files
+python-dotenv>=1.0.0
+
 # Optional packages:
 # openai>=1.0.0  # For full vision system (not needed for bindieselsimple.py)
-# python-dotenv>=1.0.0  # For environment variables
 # mediapipe  # For person detection (alternative to OpenCV)
 
