@@ -1,124 +1,47 @@
 #!/usr/bin/env python3
 """
-Real-time object detection using TensorFlow Lite on Raspberry Pi
-Based on: https://github.com/BashMocha/object-detection-on-raspberry-pi
-Uses EfficientDet-Lite0 model for object detection with picamera2
+Real-time object detection using YOLO (Ultralytics) on Raspberry Pi
+Based on: https://github.com/automaticdai/rpi-object-detection
+Uses YOLO11n model for object detection with picamera2
 """
 
+import cv2
 import time
 import sys
-import os
-import cv2
-import numpy as np
 from picamera2 import Picamera2
 
 # Suppress warnings
 import warnings
 warnings.filterwarnings('ignore')
 
-# Try to import TensorFlow Lite support
+# Try to import Ultralytics YOLO
 try:
-    from tflite_support.task import core
-    from tflite_support.task import processor
-    from tflite_support.task import vision
+    from ultralytics import YOLO
 except ImportError:
-    print("ERROR: tflite-support not installed!")
-    print("Install with: pip3 install --break-system-packages tflite-support")
-    print("Note: tflite-support requires Python 3.7-3.9")
+    print("ERROR: ultralytics not installed!")
+    print("Install with: pip3 install --break-system-packages ultralytics")
     sys.exit(1)
 
 
 # Configuration
 # Camera Module 3 Wide: 102° horizontal FOV, supports up to 2304x1296
-THREAD_NUM = 4
 DISPLAY_WIDTH = 1280  # Good balance of quality and performance
 DISPLAY_HEIGHT = 720
-DEFAULT_MODEL = 'efficientdet_lite0.tflite'
-CORAL_MODEL = 'efficientdet_lite0_edgetpu.tflite'
-FPS_POS = (20, 60)
-FPS_FONT = cv2.FONT_HERSHEY_SIMPLEX
-FPS_HEIGHT = 1.5
-FPS_WEIGHT = 3
-FPS_COLOR = (255, 0, 0)
+MODEL_NAME = 'yolo11n.pt'  # YOLO11 nano - fastest model
 FPS_AVG_FRAME_COUNT = 10
 
-# Visualization settings
-_MARGIN = 10  # pixels
-_ROW_SIZE = 10  # pixels
-_FONT_SIZE = 1
-_FONT_THICKNESS = 1
-_TEXT_COLOR = (0, 0, 255)  # red
 
-
-def download_model(model_name, model_url):
+def detect(width=DISPLAY_WIDTH, height=DISPLAY_HEIGHT, model_name=MODEL_NAME, 
+          conf_threshold=0.25, show_fps=True):
     """
-    Download TFLite model if it doesn't exist
-    
-    Args:
-        model_name: Name of the model file
-        model_url: URL to download the model from
-        
-    Returns:
-        Path to model file
-    """
-    if os.path.exists(model_name):
-        print(f"[DEBUG] Model {model_name} already exists")
-        return model_name
-    
-    print(f"[DEBUG] Downloading model {model_name}...")
-    try:
-        import urllib.request
-        urllib.request.urlretrieve(model_url, model_name)
-        print(f"[DEBUG] Model downloaded successfully")
-        return model_name
-    except Exception as e:
-        print(f"ERROR: Could not download model: {e}")
-        return None
-
-
-def visualize(image, detection_result):
-    """
-    Draws bounding boxes on the input image and return it.
-    
-    Args:
-      image: The input RGB image.
-      detection_result: The list of all "Detection" entities to be visualize.
-      
-    Returns:
-      Image with bounding boxes.
-    """
-    for detection in detection_result.detections:
-        # Draw bounding_box
-        bbox = detection.bounding_box
-        start_point = bbox.origin_x, bbox.origin_y
-        end_point = bbox.origin_x + bbox.width, bbox.origin_y + bbox.height
-        cv2.rectangle(image, start_point, end_point, _TEXT_COLOR, 3)
-        
-        # Draw label and score
-        category = detection.categories[0]
-        category_name = category.category_name
-        probability = round(category.score, 2)
-        result_text = category_name + ' (' + str(probability) + ')'
-        text_location = (_MARGIN + bbox.origin_x,
-                         _MARGIN + _ROW_SIZE + bbox.origin_y)
-        cv2.putText(image, result_text, text_location, cv2.FONT_HERSHEY_PLAIN,
-                    _FONT_SIZE, _TEXT_COLOR, _FONT_THICKNESS)
-    
-    return image
-
-
-def detect(width=DISPLAY_WIDTH, height=DISPLAY_HEIGHT, num_threads=THREAD_NUM, 
-          enable_edgetpu=False, score_threshold=0.3, max_results=4):
-    """
-    Continuously run inference on images acquired from the camera.
+    Continuously run YOLO inference on images acquired from the camera.
     
     Args:
         width: the width of the frame captured from the camera.
         height: the height of the frame captured from the camera.
-        num_threads: the number of CPU threads to run the model.
-        enable_edgetpu: True/False whether the model is a EdgeTPU model.
-        score_threshold: Minimum confidence score for detections (0.0-1.0).
-        max_results: Maximum number of detections to return.
+        model_name: YOLO model to use (default: 'yolo11n.pt' for nano model)
+        conf_threshold: Confidence threshold for detections (0.0-1.0, default: 0.25)
+        show_fps: Whether to display FPS on screen
     """
     counter, fps = 0, 0
     fps_start_time = time.time()
@@ -144,35 +67,14 @@ def detect(width=DISPLAY_WIDTH, height=DISPLAY_HEIGHT, num_threads=THREAD_NUM,
         print("  2. picamera2 is installed: sudo apt install python3-picamera2")
         return
     
-    # Determine model to use
-    if enable_edgetpu:
-        model_name = CORAL_MODEL
-        model_url = 'https://storage.googleapis.com/download.tensorflow.org/models/tflite/task_library/object_detection/rpi/efficientdet_lite0_edgetpu_metadata.tflite'
-    else:
-        model_name = DEFAULT_MODEL
-        model_url = 'https://storage.googleapis.com/download.tensorflow.org/models/tflite/task_library/object_detection/rpi/lite-model_efficientdet_lite0_detection_metadata_1.tflite'
-    
-    # Download model if needed
-    model_path = download_model(model_name, model_url)
-    if model_path is None:
-        print(f"ERROR: Could not get model file: {model_name}")
-        picam2.stop()
-        picam2.close()
-        return
-    
-    # Initialize the object detection model
-    print("[DEBUG] Initializing TensorFlow Lite model...")
+    # Load YOLO model (will auto-download on first run)
+    print(f"[DEBUG] Loading YOLO model: {model_name}...")
+    print("Note: Model will be downloaded automatically on first run (~6MB)")
     try:
-        base_options = core.BaseOptions(
-            file_name=model_path, use_coral=enable_edgetpu, num_threads=num_threads)
-        detection_options = processor.DetectionOptions(
-            max_results=max_results, score_threshold=score_threshold)
-        options = vision.ObjectDetectorOptions(
-            base_options=base_options, detection_options=detection_options)
-        detector = vision.ObjectDetector.create_from_options(options)
-        print("[DEBUG] Model loaded successfully")
+        model = YOLO(model_name)
+        print(f"[DEBUG] Model loaded successfully")
     except Exception as e:
-        print(f"ERROR: Could not initialize model: {e}")
+        print(f"ERROR: Could not load model: {e}")
         picam2.stop()
         picam2.close()
         return
@@ -181,74 +83,68 @@ def detect(width=DISPLAY_WIDTH, height=DISPLAY_HEIGHT, num_threads=THREAD_NUM,
     cv2.startWindowThread()
     
     print("\n" + "=" * 70)
-    print("Object Detection Running")
+    print("YOLO Object Detection Running")
     print("=" * 70)
     print(f"Model: {model_name}")
     print(f"Resolution: {width}x{height}")
-    print(f"Score Threshold: {score_threshold}")
-    print(f"Max Results: {max_results}")
-    print(f"Threads: {num_threads}")
+    print(f"Confidence Threshold: {conf_threshold}")
     print("=" * 70)
-    print("Press 'q' to quit")
+    print("Press 'q' or ESC to quit")
     print("=" * 70)
     print()
     
     try:
         while True:
             # Capture frame from picamera2
-            image = picam2.capture_array()
+            array = picam2.capture_array()
             
-            # Flip image (optional, depends on camera orientation)
-            # image = cv2.flip(image, -1)
+            # Convert RGB to BGR for OpenCV
+            frame = cv2.cvtColor(array, cv2.COLOR_RGB2BGR)
             
             counter += 1
             
-            # Convert the image from RGB to RGB (picamera2 already gives RGB)
-            # But TensorImage expects RGB format
-            image_RGB = image.copy()
+            # Run YOLO inference on the frame
+            results = model(frame, conf=conf_threshold, verbose=False)
             
-            # Create a TensorImage object from the RGB image
-            image_tensor = vision.TensorImage.create_from_array(image_RGB)
+            # Draw results on the frame (YOLO handles visualization)
+            annotated_frame = results[0].plot()
             
-            # Run object detection estimation using the model
-            detections = detector.detect(image_tensor)
-            
-            # Draw bounding boxes and labels on input image
-            image = visualize(image, detections)
-            
-            # Calculate the FPS
+            # Calculate FPS
             if counter % FPS_AVG_FRAME_COUNT == 0:
                 fps_end_time = time.time()
                 fps = FPS_AVG_FRAME_COUNT / (fps_end_time - fps_start_time)
                 fps_start_time = time.time()
                 
                 # Print detection count to terminal
-                num_detections = len(detections.detections)
+                num_detections = len(results[0].boxes)
                 if num_detections > 0:
                     print(f"[Frame {counter}] Detected {num_detections} object(s) | FPS: {fps:.1f}")
-                    for i, detection in enumerate(detections.detections):
-                        category = detection.categories[0]
-                        print(f"  [{i+1}] {category.category_name}: {category.score:.2f}")
+                    for box in results[0].boxes:
+                        class_id = int(box.cls[0])
+                        confidence = float(box.conf[0])
+                        class_name = model.names[class_id]
+                        print(f"  - {class_name}: {confidence:.2f}")
             
-            # Show the FPS
-            fps_text = 'FPS = {:.1f}'.format(fps)
-            cv2.putText(image, fps_text,
-                        FPS_POS, FPS_FONT, FPS_HEIGHT, FPS_COLOR, FPS_WEIGHT)
+            # Show FPS on screen
+            if show_fps:
+                fps_text = f'FPS: {fps:.1f}'
+                cv2.putText(annotated_frame, fps_text, (10, 30),
+                           cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
             
-            # Convert RGB to BGR for OpenCV display
-            image_bgr = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+            # Display the frame
+            cv2.imshow('YOLO Object Detection (Press q to quit)', annotated_frame)
             
-            # Display the image
-            cv2.imshow('Object Detection (Press q to quit)', image_bgr)
-            
-            # Stop the program if the 'Q' key is pressed
-            if cv2.waitKey(1) & 0xFF == ord('q'):
+            # Stop the program if the 'Q' key or ESC is pressed
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord('q') or key == 27:  # 'q' or ESC
                 break
                 
     except KeyboardInterrupt:
         print("\n\nInterrupted by user")
     except Exception as e:
         print(f"\nERROR: {e}")
+        import traceback
+        traceback.print_exc()
     finally:
         # Cleanup
         print("[DEBUG] Stopping camera...")
@@ -266,32 +162,35 @@ def main():
     import argparse
     
     parser = argparse.ArgumentParser(
-        description='Real-time object detection using TensorFlow Lite on Raspberry Pi')
+        description='Real-time object detection using YOLO (Ultralytics) on Raspberry Pi')
     parser.add_argument('--width', type=int, default=DISPLAY_WIDTH,
                        help=f'Camera width (default: {DISPLAY_WIDTH})')
     parser.add_argument('--height', type=int, default=DISPLAY_HEIGHT,
                        help=f'Camera height (default: {DISPLAY_HEIGHT})')
-    parser.add_argument('--threads', type=int, default=THREAD_NUM,
-                       help=f'Number of CPU threads (default: {THREAD_NUM})')
-    parser.add_argument('--edgetpu', action='store_true',
-                       help='Use EdgeTPU model (requires Coral USB Accelerator)')
-    parser.add_argument('--threshold', type=float, default=0.3,
-                       help='Score threshold for detections (0.0-1.0, default: 0.3)')
-    parser.add_argument('--max-results', type=int, default=4,
-                       help='Maximum number of detections (default: 4)')
+    parser.add_argument('--model', type=str, default=MODEL_NAME,
+                       help=f'YOLO model to use (default: {MODEL_NAME})')
+    parser.add_argument('--conf', type=float, default=0.25,
+                       help='Confidence threshold for detections (0.0-1.0, default: 0.25)')
+    parser.add_argument('--no-fps', action='store_true',
+                       help='Hide FPS counter on screen')
     
     args = parser.parse_args()
+    
+    # Available YOLO models (from fastest to most accurate):
+    # - yolo11n.pt (nano) - fastest, least accurate
+    # - yolo11s.pt (small)
+    # - yolo11m.pt (medium)
+    # - yolo11l.pt (large)
+    # - yolo11x.pt (extra large) - slowest, most accurate
     
     detect(
         width=args.width,
         height=args.height,
-        num_threads=args.threads,
-        enable_edgetpu=args.edgetpu,
-        score_threshold=args.threshold,
-        max_results=args.max_results
+        model_name=args.model,
+        conf_threshold=args.conf,
+        show_fps=not args.no_fps
     )
 
 
 if __name__ == '__main__':
     main()
-

@@ -8,36 +8,31 @@ cd ~/angleestimationbindiesel  # or wherever your project is
 git pull origin main
 ```
 
-### 2. Install TensorFlow Lite Support
+### 2. Install Ultralytics YOLO
 
-**Important:** `tflite-support` requires Python 3.7-3.9. If you're using Python 3.10+, you may need to:
-- Use a virtual environment with Python 3.9, OR
-- Downgrade to Python 3.9 system-wide
+**Much simpler than TensorFlow Lite!** YOLO works with any Python 3.6+ and doesn't have version conflicts.
 
 ```bash
-# Install tflite-support (use version 0.4.3 to avoid GLIBCXX errors)
-pip3 install --break-system-packages tflite-support==0.4.3 protobuf
+# Install ultralytics (includes PyTorch and all dependencies)
+pip3 install --break-system-packages ultralytics
 ```
 
-**If you get GLIBCXX errors**, downgrade:
-```bash
-pip3 install --break-system-packages tflite-support==0.4.3
-```
+That's it! No version conflicts, no Python version restrictions.
 
 ### 3. Run Object Detection
 
 ```bash
-# Basic usage (default: 1280x720)
+# Basic usage (default: 1280x720, yolo11n.pt model)
 python3 object_detection.py
 
 # Lower resolution for better performance
 python3 object_detection.py --width 640 --height 480
 
-# Adjust detection threshold (0.0-1.0, higher = more confident detections)
-python3 object_detection.py --threshold 0.5
+# Adjust confidence threshold (0.0-1.0, higher = more confident detections)
+python3 object_detection.py --conf 0.5
 
-# Use EdgeTPU if you have Coral USB Accelerator
-python3 object_detection.py --edgetpu
+# Use a larger, more accurate model (slower but better detection)
+python3 object_detection.py --model yolo11s.pt
 ```
 
 ## Camera Module 3 Wide Configuration
@@ -49,11 +44,19 @@ The script is configured for **Camera Module 3 Wide** with:
 
 ## Model Download
 
-The script will automatically download the EfficientDet-Lite0 model on first run:
-- **Default model**: `efficientdet_lite0.tflite` (~4MB)
-- **EdgeTPU model**: `efficientdet_lite0_edgetpu.tflite` (if using `--edgetpu`)
+The script will automatically download the YOLO model on first run:
+- **Default model**: `yolo11n.pt` (nano) - ~6MB, fastest
+- Models are downloaded to `~/.ultralytics/weights/` directory
 
-Models are downloaded to the current directory.
+### Available Models (from fastest to most accurate):
+
+- `yolo11n.pt` (nano) - **Fastest**, least accurate - **Recommended for Pi**
+- `yolo11s.pt` (small) - Balanced
+- `yolo11m.pt` (medium) - Better accuracy
+- `yolo11l.pt` (large) - High accuracy
+- `yolo11x.pt` (extra large) - **Most accurate**, slowest
+
+For Raspberry Pi, stick with `yolo11n.pt` or `yolo11s.pt` for real-time performance.
 
 ## Performance Tips
 
@@ -62,39 +65,33 @@ Models are downloaded to the current directory.
    python3 object_detection.py --width 640 --height 480
    ```
 
-2. **Adjust threads** (default: 4):
+2. **Increase confidence threshold** to reduce false positives:
    ```bash
-   python3 object_detection.py --threads 2  # Fewer threads
-   python3 object_detection.py --threads 6  # More threads
+   python3 object_detection.py --conf 0.5
    ```
 
-3. **Limit detections** for better performance:
+3. **Use nano model** (default) for best performance on Pi:
    ```bash
-   python3 object_detection.py --max-results 2
+   python3 object_detection.py --model yolo11n.pt
    ```
 
-4. **Use EdgeTPU** for 5-10x speedup (requires Coral USB Accelerator)
+4. **For better accuracy** (if you have Pi 4/5 with good cooling):
+   ```bash
+   python3 object_detection.py --model yolo11s.pt
+   ```
 
 ## Troubleshooting
 
-### "tflite-support not installed"
+### "ultralytics not installed"
 ```bash
-pip3 install --break-system-packages tflite-support==0.4.3 protobuf
+pip3 install --break-system-packages ultralytics
 ```
 
-### "GLIBCXX_3.4.29 not found"
-Downgrade tflite-support:
-```bash
-pip3 install --break-system-packages tflite-support==0.4.3
-```
-
-### "Python version not supported"
-tflite-support requires Python 3.7-3.9. Check your version:
-```bash
-python3 --version
-```
-
-If you have Python 3.10+, create a virtual environment with Python 3.9 or downgrade your system Python.
+### "Model download failed"
+The model downloads automatically. If it fails:
+- Check internet connection
+- Try running again (it will retry)
+- Or manually download from: https://github.com/ultralytics/assets/releases
 
 ### Camera not detected
 ```bash
@@ -108,23 +105,45 @@ sudo apt install python3-picamera2
 
 ### Low FPS
 - Lower resolution: `--width 640 --height 480`
-- Reduce max results: `--max-results 2`
-- Increase threshold: `--threshold 0.5` (fewer detections to process)
-- Use EdgeTPU if available
+- Use nano model: `--model yolo11n.pt` (default)
+- Increase confidence: `--conf 0.5` (fewer detections to process)
+- Close other applications to free up CPU
+
+### Out of memory
+- Lower resolution: `--width 640 --height 480`
+- Use nano model only: `--model yolo11n.pt`
+- Close other applications
 
 ## Keyboard Controls
 
-- **'q'** - Quit the program
+- **'q'** or **ESC** - Quit the program
 
 ## What Objects Can It Detect?
 
-The EfficientDet-Lite0 model can detect 80 common objects including:
-- Person, car, bicycle, motorcycle
-- Cup, bottle, bowl
-- Keyboard, mouse, laptop
-- Chair, couch, bed
-- Dog, cat, bird
+YOLO11 can detect 80 common objects including:
+- Person, car, bicycle, motorcycle, bus, truck
+- Cup, bottle, bowl, fork, knife, spoon
+- Keyboard, mouse, laptop, cell phone
+- Chair, couch, bed, dining table
+- Dog, cat, bird, horse, cow, sheep
 - And many more!
 
 See the terminal output for detected objects and their confidence scores.
 
+## Comparison: YOLO vs TensorFlow Lite
+
+| Feature | YOLO (Ultralytics) | TensorFlow Lite |
+|---------|-------------------|-----------------|
+| Installation | Simple (`pip install ultralytics`) | Complex (version conflicts) |
+| Python Support | 3.6+ | 3.7-3.9 only |
+| Model Size | ~6MB (nano) | ~4MB |
+| Accuracy | Excellent | Good |
+| Speed | Fast | Fast |
+| Ease of Use | Very Easy | Moderate |
+| **Recommendation** | ✅ **Use this** | ❌ Avoid (version issues) |
+
+## References
+
+- Based on: https://github.com/automaticdai/rpi-object-detection
+- Ultralytics YOLO Docs: https://docs.ultralytics.com/
+- Raspberry Pi Guide: https://docs.ultralytics.com/guides/raspberry-pi/

@@ -9,11 +9,10 @@ pvporcupine>=3.0.0
 # Required for loading .env files
 python-dotenv>=1.0.0
 
-# TensorFlow Lite for object detection
-# Note: tflite-support requires Python 3.7-3.9
-# If using Python 3.10+, you may need to use a virtual environment with Python 3.9
-tflite-support>=0.4.2,<0.4.4
-protobuf>=3.18.0,<4
+# YOLO (Ultralytics) for object detection
+# Much simpler than TensorFlow Lite - works with any Python 3.6+
+# Model will auto-download on first run (~6MB for yolo11n.pt)
+ultralytics>=8.0.0
 
 # Optional packages:
 # openai>=1.0.0  # For full vision system (not needed for bindieselsimple.py)
