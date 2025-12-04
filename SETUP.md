@@ -83,6 +83,38 @@ If missing, download it from [Picovoice Console](https://console.picovoice.ai/) 
 python3 bindieselsimple.py
 ```
 
+## Testing
+
+### Test Wake Word First
+
+Before testing the full system, test wake word detection:
+
+```bash
+# Make sure AccessKey is set
+export PICOVOICE_ACCESS_KEY='your-access-key-here'
+
+# Run wake word test
+python3 test_wake_word.py
+```
+
+Say "bin diesel" and you should see "WAKE WORD DETECTED!" messages.
+
+### Test Camera
+
+Test camera and flag detection separately:
+
+```bash
+python3 camerasimple.py
+```
+
+### Test Full System
+
+Once wake word and camera work separately:
+
+```bash
+python3 bindieselsimple.py
+```
+
 ## How It Works
 
 1. **Wake Word Detection**: Uses Picovoice Porcupine to detect "bin diesel"
