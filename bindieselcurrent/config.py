@@ -61,3 +61,12 @@ FOLLOW_SPEED = MOTOR_SLOW    # Speed when following user
 EMERGENCY_STOP_ENABLED = True  # Enable TOF emergency stop
 MAX_SPEED_LIMIT = MOTOR_MEDIUM  # Maximum allowed speed (safety limit)
 
+# Debug Configuration
+DEBUG_MODE = False  # Enable debug logging throughout system
+DEBUG_VISUAL = False  # Debug visual detection specifically
+DEBUG_MOTOR = False  # Debug motor commands
+DEBUG_SERVO = False  # Debug servo commands
+DEBUG_TOF = False  # Debug TOF sensor readings
+DEBUG_VOICE = False  # Debug voice recognition
+DEBUG_STATE = False  # Debug state machine transitions
+

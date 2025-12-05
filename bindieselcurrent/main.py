@@ -124,6 +124,11 @@ class BinDieselSystem:
         self.last_visual_update = 0
         self.visual_update_interval = 0.1  # Update visual detection every 100ms
         
+        # Debug mode
+        self.debug_mode = config.DEBUG_MODE
+        if self.debug_mode:
+            print("[Main] DEBUG MODE ENABLED")
+        
         # Register signal handlers for graceful shutdown
         signal.signal(signal.SIGINT, self.signal_handler)
         signal.signal(signal.SIGTERM, self.signal_handler)
@@ -145,6 +150,8 @@ class BinDieselSystem:
         if self.wake_word.detect():
             self.state_machine.transition_to(State.ACTIVE)
             print("[Main] System activated!")
+            if self.debug_mode:
+                print("[Main] DEBUG: Wake word detected, transitioning to ACTIVE")
     
     def handle_active_state(self):
         """Handle ACTIVE state - waiting for mode selection"""
@@ -193,8 +200,14 @@ class BinDieselSystem:
         """Handle FOLLOWING_USER state - moving toward user"""
         # Check TOF sensor for emergency stop
         if self.tof and config.EMERGENCY_STOP_ENABLED:
+            distance = self.tof.read_distance()
+            if self.debug_mode and config.DEBUG_TOF:
+                print(f"[Main] DEBUG: TOF distance: {distance/10:.1f}cm" if distance else "[Main] DEBUG: TOF read error")
+            
             if self.tof.is_emergency_stop():
                 print("[Main] EMERGENCY STOP: Object too close!")
+                if self.debug_mode:
+                    print(f"[Main] DEBUG: Emergency stop triggered at {distance/10:.1f}cm")
                 self.motor.stop()
                 self.servo.center()
                 return
@@ -223,20 +236,32 @@ class BinDieselSystem:
         if result['angle'] is not None:
             angle = result['angle']
             
+            if self.debug_mode and config.DEBUG_VISUAL:
+                print(f"[Main] DEBUG: Person angle: {angle:.1f}°, centered: {result['is_centered']}")
+            
             # Convert angle to steering position
             # Use configurable gain to adjust sensitivity
             steering_position = (angle / 45.0) * config.ANGLE_TO_STEERING_GAIN
             steering_position = max(-1.0, min(1.0, steering_position))
+            
+            if self.debug_mode and config.DEBUG_SERVO:
+                print(f"[Main] DEBUG: Setting servo angle: {angle:.1f}° (position: {steering_position:.2f})")
             
             self.servo.set_angle(angle)
             
             # Adjust speed based on how centered user is
             if result['is_centered']:
                 # User is centered - move forward
-                self.motor.forward(config.FOLLOW_SPEED)
+                speed = config.FOLLOW_SPEED
+                if self.debug_mode and config.DEBUG_MOTOR:
+                    print(f"[Main] DEBUG: User centered, moving forward at {speed*100:.0f}%")
+                self.motor.forward(speed)
             else:
                 # User not centered - slow down while turning
-                self.motor.forward(config.FOLLOW_SPEED * 0.7)
+                speed = config.FOLLOW_SPEED * 0.7
+                if self.debug_mode and config.DEBUG_MOTOR:
+                    print(f"[Main] DEBUG: User not centered, moving forward at {speed*100:.0f}% while turning")
+                self.motor.forward(speed)
         else:
             # No angle data - stop
             self.motor.stop()
