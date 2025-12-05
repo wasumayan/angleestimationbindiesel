@@ -46,7 +46,7 @@ class BinDieselSystem:
         print("\n[Main] Initializing wake word detector...")
         try:
             wake_word_path = os.path.join(
-                os.path.dirname(os.path.dirname(__file__)),
+                os.path.dirname(__file__),
                 'bin-diesel_en_raspberry-pi_v3_0_0',
                 'bin-diesel_en_raspberry-pi_v3_0_0.ppn'
             )

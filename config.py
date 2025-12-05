@@ -45,7 +45,7 @@ PERSON_CENTER_THRESHOLD = 30  # Pixels from center to consider "centered"
 ANGLE_TO_STEERING_GAIN = 0.5  # How much to turn based on angle
 
 # Wake Word Configuration
-WAKE_WORD_MODEL_PATH = '../bin-diesel_en_raspberry-pi_v3_0_0/bin-diesel_en_raspberry-pi_v3_0_0.ppn'
+WAKE_WORD_MODEL_PATH = 'bin-diesel_en_raspberry-pi_v3_0_0/bin-diesel_en_raspberry-pi_v3_0_0.ppn'
 WAKE_WORD_ACCESS_KEY = None  # Set in .env file or environment variable
 
 # Voice Recognition (Manual Mode)
