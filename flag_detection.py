@@ -188,7 +188,7 @@ def draw_detection(frame, flag_data, angle, color_name, frame_width, mask):
     Draw detection overlay on frame with mask display
     
     Args:
-        frame: Camera frame
+        frame: Camera frame (BGR format for OpenCV drawing functions)
         flag_data: (center_x, center_y, area, bbox) or None
         angle: Calculated angle in degrees or None
         color_name: Name of color being detected
@@ -352,18 +352,22 @@ def main():
             # Capture frame from picamera2 (returns RGB)
             array = picam2.capture_array()
             
-            # Convert RGB to BGR for OpenCV
-            frame = cv2.cvtColor(array, cv2.COLOR_RGB2BGR)
-            frame_width = frame.shape[1]
+            # picamera2 returns RGB, but OpenCV uses BGR
+            # Convert RGB to BGR for OpenCV processing
+            frame_bgr = cv2.cvtColor(array, cv2.COLOR_RGB2BGR)
+            frame_width = frame_bgr.shape[1]
             
-            # Convert to HSV for debugging
-            frame_hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+            # Keep RGB version for display (so colors look correct)
+            frame_rgb = array.copy()
+            
+            # Convert to HSV for debugging (use BGR version for processing)
+            frame_hsv = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2HSV)
             
             # Set up mouse callback with HSV frame
             cv2.setMouseCallback(window_name, mouse_callback, {'frame_hsv': frame_hsv})
             
-            # Detect flag
-            flag_data, mask = detector.detect_flag(frame)
+            # Detect flag (use BGR for processing)
+            flag_data, mask = detector.detect_flag(frame_bgr)
             
             # Calculate angle if flag detected
             angle = None
@@ -371,20 +375,29 @@ def main():
                 center_x, center_y, _, _ = flag_data
                 angle = detector.calculate_angle((center_x, center_y), frame_width)
             
-            # Draw detection overlay
-            draw_detection(frame, flag_data, angle, detector.color, frame_width, mask)
+            # Draw detection overlay on RGB frame (for correct color display)
+            # Convert RGB to BGR temporarily for drawing, then convert back
+            frame_display = frame_rgb.copy()
+            # OpenCV drawing functions expect BGR, so convert temporarily
+            frame_display_bgr = cv2.cvtColor(frame_display, cv2.COLOR_RGB2BGR)
+            draw_detection(frame_display_bgr, flag_data, angle, detector.color, frame_width, mask)
+            # Convert back to RGB for display
+            frame_display = cv2.cvtColor(frame_display_bgr, cv2.COLOR_BGR2RGB)
             
             # Debug: Show HSV values at mouse position
             if mouse_pos and hsv_values:
                 x, y = mouse_pos
                 h, s, v = hsv_values
                 debug_text = f"HSV at ({x},{y}): H={h}, S={s}, V={v}"
-                cv2.putText(frame, debug_text, (10, frame.shape[0] - 60),
+                # Convert to BGR for drawing, then back to RGB
+                frame_temp = cv2.cvtColor(frame_display, cv2.COLOR_RGB2BGR)
+                cv2.putText(frame_temp, debug_text, (10, frame_display.shape[0] - 60),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
                 # Draw crosshair at clicked point
-                cv2.circle(frame, (x, y), 5, (255, 255, 0), 2)
-                cv2.line(frame, (x-10, y), (x+10, y), (255, 255, 0), 1)
-                cv2.line(frame, (x, y-10), (x, y+10), (255, 255, 0), 1)
+                cv2.circle(frame_temp, (x, y), 5, (255, 255, 0), 2)
+                cv2.line(frame_temp, (x-10, y), (x+10, y), (255, 255, 0), 1)
+                cv2.line(frame_temp, (x, y-10), (x, y+10), (255, 255, 0), 1)
+                frame_display = cv2.cvtColor(frame_temp, cv2.COLOR_BGR2RGB)
             
             # Debug: Show mask statistics
             if mask is not None:
@@ -392,8 +405,11 @@ def main():
                 total_pixels = mask.shape[0] * mask.shape[1]
                 mask_percent = (mask_pixels / total_pixels) * 100
                 mask_stats = f"Mask: {mask_pixels}/{total_pixels} pixels ({mask_percent:.1f}%)"
-                cv2.putText(frame, mask_stats, (10, frame.shape[0] - 40),
+                # Convert to BGR for drawing, then back to RGB
+                frame_temp = cv2.cvtColor(frame_display, cv2.COLOR_RGB2BGR)
+                cv2.putText(frame_temp, mask_stats, (10, frame_display.shape[0] - 40),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
+                frame_display = cv2.cvtColor(frame_temp, cv2.COLOR_BGR2RGB)
             
             # Print to terminal periodically
             frame_count += 1
@@ -431,20 +447,22 @@ def main():
                 # Show mask alongside frame
                 mask_colored = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
                 # Resize mask to match frame height if needed
-                if mask_colored.shape[0] != frame.shape[0]:
-                    mask_colored = cv2.resize(mask_colored, (frame.shape[1], frame.shape[0]))
+                if mask_colored.shape[0] != frame_display.shape[0]:
+                    mask_colored = cv2.resize(mask_colored, (frame_display.shape[1], frame_display.shape[0]))
                 
                 # Also show HSV visualization for debugging
+                # Convert HSV back to RGB for display (HSV->BGR->RGB)
                 hsv_vis = frame_hsv.copy()
-                # Normalize HSV for display (H: 0-179, S: 0-255, V: 0-255)
-                hsv_vis[:, :, 0] = (hsv_vis[:, :, 0] * 255 / 180).astype(np.uint8)  # H channel
-                hsv_display = cv2.cvtColor(hsv_vis, cv2.COLOR_HSV2BGR)
+                # Normalize H channel for better visualization
+                hsv_vis[:, :, 0] = (hsv_vis[:, :, 0] * 255 / 180).astype(np.uint8)
+                hsv_bgr = cv2.cvtColor(hsv_vis, cv2.COLOR_HSV2BGR)
+                hsv_display = cv2.cvtColor(hsv_bgr, cv2.COLOR_BGR2RGB)  # Convert to RGB for correct display
                 
-                # Combine: Original | Mask | HSV
-                combined = np.hstack([frame, mask_colored, hsv_display])
+                # Combine: Original (RGB) | Mask | HSV (RGB)
+                combined = np.hstack([frame_display, mask_colored, hsv_display])
                 cv2.imshow(window_name, combined)
             else:
-                cv2.imshow('Flag Detection (Press q to quit)', frame)
+                cv2.imshow('Flag Detection (Press q to quit)', frame_display)
             
             # Handle keyboard input
             key = cv2.waitKey(1) & 0xFF
