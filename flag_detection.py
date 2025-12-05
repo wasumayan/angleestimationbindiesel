@@ -33,6 +33,11 @@ class ColorFlagDetector:
         self.horizontal_fov = horizontal_fov
         self.min_area = min_area
         
+        # Centroid smoothing for stable detection
+        self.last_centroid = None
+        self.centroid_history = []
+        self.history_size = 5  # Average over last 5 detections
+        
         # Enhanced HSV color ranges - more tolerant for varying lighting
         # Lower saturation/value thresholds to catch colors in different lighting
         self.color_ranges = {
@@ -55,6 +60,34 @@ class ColorFlagDetector:
                 (np.array([15, 50, 50]), np.array([35, 255, 255]))
             ]
         }
+    
+    def smooth_centroid(self, new_centroid):
+        """
+        Smooth centroid using moving average to reduce jitter
+        
+        Args:
+            new_centroid: (x, y) tuple of new centroid
+            
+        Returns:
+            Smoothed (x, y) centroid
+        """
+        if new_centroid is None:
+            return self.last_centroid
+        
+        self.centroid_history.append(new_centroid)
+        if len(self.centroid_history) > self.history_size:
+            self.centroid_history.pop(0)
+        
+        # Calculate average
+        if len(self.centroid_history) > 0:
+            avg_x = int(np.mean([c[0] for c in self.centroid_history]))
+            avg_y = int(np.mean([c[1] for c in self.centroid_history]))
+            smoothed = (avg_x, avg_y)
+            self.last_centroid = smoothed
+            return smoothed
+        
+        self.last_centroid = new_centroid
+        return new_centroid
     
     def detect_flag(self, frame):
         """
@@ -107,6 +140,15 @@ class ColorFlagDetector:
         # Final dilation to ensure connected regions
         mask = cv2.dilate(mask, kernel_medium, iterations=1)
         
+        # Additional validation: check if mask has enough pixels
+        mask_pixel_count = np.sum(mask > 0)
+        total_pixels = mask.shape[0] * mask.shape[1]
+        mask_percentage = (mask_pixel_count / total_pixels) * 100
+        
+        # If mask is too sparse (< 0.1% of image), likely false detection
+        if mask_percentage < 0.1:
+            return None, mask
+        
         # Find contours
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         
@@ -125,7 +167,7 @@ class ColorFlagDetector:
             aspect_ratio = float(w) / h if h > 0 else 0
             
             # Filter by aspect ratio (flags are usually somewhat rectangular)
-            # Allow wide range: 0.3 to 3.0 (very flexible)
+            # Allow wide range: 0.1 to 10 (very flexible)
             if aspect_ratio < 0.1 or aspect_ratio > 10:
                 continue
             
@@ -138,22 +180,40 @@ class ColorFlagDetector:
             if solidity < 0.3:
                 continue
             
-            valid_contours.append((contour, area, (x, y, w, h)))
+            # Additional validation: check if contour fills reasonable portion of bounding box
+            bbox_area = w * h
+            fill_ratio = area / bbox_area if bbox_area > 0 else 0
+            if fill_ratio < 0.3:  # Contour should fill at least 30% of bounding box
+                continue
+            
+            # Calculate centroid using moments for accuracy
+            M = cv2.moments(contour)
+            if M["m00"] == 0:
+                continue
+            
+            centroid_x = int(M["m10"] / M["m00"])
+            centroid_y = int(M["m01"] / M["m00"])
+            
+            # Check if centroid is within bounding box (sanity check)
+            if not (x <= centroid_x <= x + w and y <= centroid_y <= y + h):
+                continue
+            
+            valid_contours.append((contour, area, (x, y, w, h), (centroid_x, centroid_y)))
         
         if len(valid_contours) == 0:
             return None, mask
         
         # Select the largest valid contour (assumed to be the flag)
         largest = max(valid_contours, key=lambda x: x[1])
-        largest_contour, area, bbox = largest
+        largest_contour, area, bbox, centroid = largest
         
-        # Calculate center of flag using moments
-        M = cv2.moments(largest_contour)
-        if M["m00"] == 0:
-            return None, mask
+        # Use centroid from moments (more accurate than bounding box center)
+        center_x, center_y = centroid
         
-        center_x = int(M["m10"] / M["m00"])
-        center_y = int(M["m01"] / M["m00"])
+        # Smooth the centroid to reduce jitter
+        smoothed_centroid = self.smooth_centroid((center_x, center_y))
+        if smoothed_centroid:
+            center_x, center_y = smoothed_centroid
         
         return (center_x, center_y, area, bbox), mask
     
