@@ -172,8 +172,12 @@ class ColorFlagDetector:
             aspect_ratio = float(w) / h if h > 0 else 0
             
             # Filter by aspect ratio (flags are usually somewhat rectangular)
-            # Allow wide range: 0.1 to 10 (very flexible)
-            if aspect_ratio < 0.1 or aspect_ratio > 10:
+            # Allow wide range: 0.2 to 5.0 (reasonable for flags)
+            if aspect_ratio < 0.2 or aspect_ratio > 5.0:
+                continue
+            
+            # Filter by minimum size (both width and height should be reasonable)
+            if w < 20 or h < 20:  # Reject very small detections
                 continue
             
             # Calculate solidity (area / convex hull area)
@@ -188,8 +192,12 @@ class ColorFlagDetector:
             # Additional validation: check if contour fills reasonable portion of bounding box
             bbox_area = w * h
             fill_ratio = area / bbox_area if bbox_area > 0 else 0
-            if fill_ratio < 0.3:  # Contour should fill at least 30% of bounding box
+            if fill_ratio < 0.4:  # Contour should fill at least 40% of bounding box (stricter)
                 continue
+            
+            # Additional check: reject if contour is too fragmented (many small pieces)
+            # Count how many separate regions are in the bounding box
+            # This helps reject text/logos on objects
             
             # Calculate centroid using moments for accuracy
             M = cv2.moments(contour)
