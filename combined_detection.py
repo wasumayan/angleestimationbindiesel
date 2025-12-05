@@ -28,8 +28,7 @@ try:
     MEDIAPIPE_AVAILABLE = True
 except ImportError:
     MEDIAPIPE_AVAILABLE = False
-    print("[WARNING] MediaPipe not installed - gesture detection will be disabled")
-    print("Install with: pip3 install --break-system-packages mediapipe")
+    # Don't print warning here - will be handled in main() if gesture detection is requested
 
 
 # Configuration
@@ -379,19 +378,25 @@ def main():
     
     # Initialize MediaPipe Pose if available
     pose_detector = None
-    if MEDIAPIPE_AVAILABLE and not args.no_gesture:
-        print("[DEBUG] Initializing MediaPipe Pose...")
-        mp_pose = mp.solutions.pose
-        pose_detector = mp_pose.Pose(
-            static_image_mode=False,
-            model_complexity=1,  # 0=light, 1=medium, 2=heavy (use 1 for balance)
-            enable_segmentation=False,
-            min_detection_confidence=0.5,
-            min_tracking_confidence=0.5
-        )
-        print("[DEBUG] MediaPipe Pose initialized")
+    if not args.no_gesture:
+        if MEDIAPIPE_AVAILABLE:
+            print("[DEBUG] Initializing MediaPipe Pose...")
+            mp_pose = mp.solutions.pose
+            pose_detector = mp_pose.Pose(
+                static_image_mode=False,
+                model_complexity=1,  # 0=light, 1=medium, 2=heavy (use 1 for balance)
+                enable_segmentation=False,
+                min_detection_confidence=0.5,
+                min_tracking_confidence=0.5
+            )
+            print("[DEBUG] MediaPipe Pose initialized")
+        else:
+            print("[WARNING] MediaPipe not installed - gesture detection disabled")
+            print("  Install with: pip3 install --break-system-packages mediapipe")
+            print("  Or run with: --no-gesture to suppress this warning")
+            print("  See GESTURE_DETECTION_SETUP.md for troubleshooting")
     else:
-        print("[DEBUG] MediaPipe not available - gesture detection disabled")
+        print("[DEBUG] Gesture detection disabled (--no-gesture flag)")
     
     # Initialize picamera2
     print("[DEBUG] Initializing picamera2 (Camera Module 3 Wide)...")
