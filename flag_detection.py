@@ -277,6 +277,8 @@ def main():
     print("Press 'q' to quit")
     print("Press 'r', 'g', 'b', 'y' to switch colors (red, green, blue, yellow)")
     print("Press '+'/'-' to adjust min area threshold")
+    print("Press 'm' to toggle mask display")
+    print("Click on image to see HSV values at that point (for debugging)")
     print("=" * 70)
     print()
     
@@ -322,14 +324,43 @@ def main():
     start_time = time.time()
     show_mask = not args.no_mask
     
+    # Debug: Mouse callback to show HSV values at clicked point
+    mouse_pos = None
+    hsv_values = None
+    
+    def mouse_callback(event, x, y, flags, param):
+        nonlocal mouse_pos, hsv_values
+        if event == cv2.EVENT_LBUTTONDOWN:
+            mouse_pos = (x, y)
+            # Get HSV value at clicked point
+            if 'frame_hsv' in param:
+                hsv_val = param['frame_hsv'][y, x]
+                hsv_values = tuple(hsv_val)
+                print(f"\n[DEBUG] Clicked at ({x}, {y})")
+                print(f"  HSV: H={hsv_val[0]}, S={hsv_val[1]}, V={hsv_val[2]}")
+                print(f"  Current color range for {detector.color}:")
+                if detector.color in detector.color_ranges:
+                    for i, (lower, upper) in enumerate(detector.color_ranges[detector.color]):
+                        print(f"    Range {i+1}: H[{lower[0]}-{upper[0]}], S[{lower[1]}-{upper[1]}], V[{lower[2]}-{upper[2]}]")
+    
+    # Create window and set mouse callback
+    window_name = 'Flag Detection - Original | Mask (Press q to quit)'
+    cv2.namedWindow(window_name)
+    
     try:
         while True:
-            # Capture frame from picamera2
+            # Capture frame from picamera2 (returns RGB)
             array = picam2.capture_array()
             
             # Convert RGB to BGR for OpenCV
             frame = cv2.cvtColor(array, cv2.COLOR_RGB2BGR)
             frame_width = frame.shape[1]
+            
+            # Convert to HSV for debugging
+            frame_hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+            
+            # Set up mouse callback with HSV frame
+            cv2.setMouseCallback(window_name, mouse_callback, {'frame_hsv': frame_hsv})
             
             # Detect flag
             flag_data, mask = detector.detect_flag(frame)
@@ -343,6 +374,27 @@ def main():
             # Draw detection overlay
             draw_detection(frame, flag_data, angle, detector.color, frame_width, mask)
             
+            # Debug: Show HSV values at mouse position
+            if mouse_pos and hsv_values:
+                x, y = mouse_pos
+                h, s, v = hsv_values
+                debug_text = f"HSV at ({x},{y}): H={h}, S={s}, V={v}"
+                cv2.putText(frame, debug_text, (10, frame.shape[0] - 60),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
+                # Draw crosshair at clicked point
+                cv2.circle(frame, (x, y), 5, (255, 255, 0), 2)
+                cv2.line(frame, (x-10, y), (x+10, y), (255, 255, 0), 1)
+                cv2.line(frame, (x, y-10), (x, y+10), (255, 255, 0), 1)
+            
+            # Debug: Show mask statistics
+            if mask is not None:
+                mask_pixels = np.sum(mask > 0)
+                total_pixels = mask.shape[0] * mask.shape[1]
+                mask_percent = (mask_pixels / total_pixels) * 100
+                mask_stats = f"Mask: {mask_pixels}/{total_pixels} pixels ({mask_percent:.1f}%)"
+                cv2.putText(frame, mask_stats, (10, frame.shape[0] - 40),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
+            
             # Print to terminal periodically
             frame_count += 1
             if frame_count % 30 == 0:  # Every 30 frames
@@ -354,7 +406,25 @@ def main():
                           f"Area: {int(flag_data[2]):6d} | "
                           f"Angle: {angle:.2f}° | FPS: {fps:.1f}")
                 else:
-                    print(f"[Frame {frame_count}] No flag detected | FPS: {fps:.1f}")
+                    # Debug: Show why no flag detected
+                    if mask is not None:
+                        mask_pixels = np.sum(mask > 0)
+                        total_pixels = mask.shape[0] * mask.shape[1]
+                        mask_percent = (mask_pixels / total_pixels) * 100
+                        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                        if len(contours) > 0:
+                            largest_area = max([cv2.contourArea(c) for c in contours])
+                            print(f"[Frame {frame_count}] No flag detected | "
+                                  f"Mask: {mask_percent:.1f}% | "
+                                  f"Largest contour: {int(largest_area)} (min: {detector.min_area}) | "
+                                  f"FPS: {fps:.1f}")
+                        else:
+                            print(f"[Frame {frame_count}] No flag detected | "
+                                  f"Mask: {mask_percent:.1f}% | "
+                                  f"No contours found | "
+                                  f"FPS: {fps:.1f}")
+                    else:
+                        print(f"[Frame {frame_count}] No flag detected | FPS: {fps:.1f}")
             
             # Show video with mask by default
             if show_mask:
@@ -363,8 +433,16 @@ def main():
                 # Resize mask to match frame height if needed
                 if mask_colored.shape[0] != frame.shape[0]:
                     mask_colored = cv2.resize(mask_colored, (frame.shape[1], frame.shape[0]))
-                combined = np.hstack([frame, mask_colored])
-                cv2.imshow('Flag Detection - Original | Mask (Press q to quit)', combined)
+                
+                # Also show HSV visualization for debugging
+                hsv_vis = frame_hsv.copy()
+                # Normalize HSV for display (H: 0-179, S: 0-255, V: 0-255)
+                hsv_vis[:, :, 0] = (hsv_vis[:, :, 0] * 255 / 180).astype(np.uint8)  # H channel
+                hsv_display = cv2.cvtColor(hsv_vis, cv2.COLOR_HSV2BGR)
+                
+                # Combine: Original | Mask | HSV
+                combined = np.hstack([frame, mask_colored, hsv_display])
+                cv2.imshow(window_name, combined)
             else:
                 cv2.imshow('Flag Detection (Press q to quit)', frame)
             
