@@ -38,26 +38,28 @@ class ColorFlagDetector:
         self.centroid_history = []
         self.history_size = 5  # Average over last 5 detections
         
-        # Enhanced HSV color ranges - more tolerant for varying lighting
-        # Lower saturation/value thresholds to catch colors in different lighting
+        # HSV color ranges for color detection
+        # OpenCV HSV: H=[0,179], S=[0,255], V=[0,255]
+        # These ranges are based on standard color detection practices
         self.color_ranges = {
             'red': [
-                # Lower red range - more tolerant
+                # Red wraps around 0/180, so we need two ranges
+                # Lower red (0-10 degrees)
                 (np.array([0, 50, 50]), np.array([10, 255, 255])),
-                # Upper red range - more tolerant
+                # Upper red (170-180 degrees)
                 (np.array([170, 50, 50]), np.array([180, 255, 255]))
             ],
             'green': [
-                # Wider green range for better detection
-                (np.array([35, 40, 40]), np.array([85, 255, 255]))
+                # Green is around 60 degrees in HSV
+                (np.array([40, 50, 50]), np.array([80, 255, 255]))
             ],
             'blue': [
-                # Wider blue range
-                (np.array([95, 40, 40]), np.array([135, 255, 255]))
+                # Blue is around 120 degrees in HSV
+                (np.array([100, 50, 50]), np.array([130, 255, 255]))
             ],
             'yellow': [
-                # Wider yellow range
-                (np.array([15, 50, 50]), np.array([35, 255, 255]))
+                # Yellow is around 30 degrees in HSV
+                (np.array([20, 50, 50]), np.array([30, 255, 255]))
             ]
         }
     
@@ -102,10 +104,13 @@ class ColorFlagDetector:
         if frame is None:
             return None, None
         
-        # Apply Gaussian blur to reduce noise
-        blurred = cv2.GaussianBlur(frame, (5, 5), 0)
+        # Apply blur to reduce noise (like rpi-object-detection does)
+        # Use simple blur first, then Gaussian for better performance
+        blurred = cv2.blur(frame, (3, 3))
+        blurred = cv2.GaussianBlur(blurred, (5, 5), 0)
         
         # Convert BGR to HSV
+        # CRITICAL: frame must be in BGR format for this to work correctly
         hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
         
         # Get color range for selected color
@@ -409,18 +414,19 @@ def main():
     
     try:
         while True:
-            # Capture frame from picamera2 (returns RGB)
+            # Capture frame from picamera2
+            # Note: picamera2.capture_array() returns RGB888 format
             array = picam2.capture_array()
             
-            # picamera2 returns RGB, but OpenCV uses BGR
-            # Convert RGB to BGR for OpenCV processing
+            # IMPORTANT: picamera2 returns RGB, OpenCV expects BGR
+            # Convert RGB to BGR for all OpenCV operations
             frame_bgr = cv2.cvtColor(array, cv2.COLOR_RGB2BGR)
             frame_width = frame_bgr.shape[1]
             
-            # Keep RGB version for display (so colors look correct)
+            # Keep RGB version for display (so colors look correct when shown)
             frame_rgb = array.copy()
             
-            # Convert to HSV for debugging (use BGR version for processing)
+            # Convert BGR to HSV for color detection (must use BGR version!)
             frame_hsv = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2HSV)
             
             # Set up mouse callback with HSV frame
@@ -511,10 +517,11 @@ def main():
                     mask_colored = cv2.resize(mask_colored, (frame_display.shape[1], frame_display.shape[0]))
                 
                 # Also show HSV visualization for debugging
-                # Convert HSV back to RGB for display (HSV->BGR->RGB)
+                # Create a visualization of the HSV space
+                # Method: Show the original frame with HSV color space overlay
+                # This helps see what the camera sees in HSV
                 hsv_vis = frame_hsv.copy()
-                # Normalize H channel for better visualization
-                hsv_vis[:, :, 0] = (hsv_vis[:, :, 0] * 255 / 180).astype(np.uint8)
+                # Convert HSV back to BGR, then to RGB for display
                 hsv_bgr = cv2.cvtColor(hsv_vis, cv2.COLOR_HSV2BGR)
                 hsv_display = cv2.cvtColor(hsv_bgr, cv2.COLOR_BGR2RGB)  # Convert to RGB for correct display
                 
