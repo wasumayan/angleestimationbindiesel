@@ -5,9 +5,12 @@ Controls motor speed using PWM signals via GPIO
 
 import time
 import config
+from model_GPIO import ModelGPIO
 
 if config.USE_GPIO:
     import RPi.GPIO as GPIO
+
+else: GPIO = ModelGPIO()
 
 
 class MotorController:

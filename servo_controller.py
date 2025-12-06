@@ -5,18 +5,23 @@ Controls steering servo using PWM signals via GPIO
 
 import time
 import config
+from model_GPIO import ModelGPIO
 
 if config.USE_GPIO:
     import RPi.GPIO as GPIO
+else:
+    GPIO = ModelGPIO
+
+
 
 
 class ServoController:
-    def _init_(self, pwm_pin, frequency, center, l_max, r_max):
+    def __init__(self, pwm_pin, frequency, center_duty, left_max_duty, right_max_duty):
         self.pwm_pin = pwm_pin
         self.frequency = frequency
-        self.center_duty = center
-        self.left_max_duty = l_max
-        self.right_max_duty = r_max
+        self.center_duty = center_duty
+        self.left_max_duty = left_max_duty
+        self.right_max_duty = right_max_duty
         self.pwm = None
 
         if config.USE_GPIO:
@@ -27,6 +32,11 @@ class ServoController:
 
         if config.DEBUG_SERVO:
             print(f"[Servo] Initialized on pin {self.pwm_pin} at {self.frequency} Hz")
+            print(
+                f"[Servo] center={self.center_duty:.2f}%, "
+                f"left_max={self.left_max_duty:.2f}%, "
+                f"right_max={self.right_max_duty:.2f}%"
+            )
 
     def _set_duty(self, duty):
         duty = max(min(duty, self.left_max_duty), self.right_max_duty)
@@ -53,7 +63,7 @@ class ServoController:
         else:
             duty = self.center_duty + (self.left_max_duty - self.center_duty) * (angle_deg / -45.0)
 
-        if config.DEBUG.SERVO:
+        if config.DEBUG_SERVO:
             print(f"[Servo] set_angle({angle_deg:.1f}) degrees -> duty = {duty:.2f}%")
 
         self._set_duty(duty)

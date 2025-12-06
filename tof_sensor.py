@@ -5,12 +5,15 @@ VL53L0X distance sensor for obstacle detection and user proximity
 
 import config
 import time
+from model_GPIO import ModelGPIO
 
 if config.USE_GPIO:
     import RPi.GPIO as GPIO
 
+else: GPIO = ModelGPIO(); 
+
 class ToFSensor:
-    def _init_(self, stop_distance_mm=None):
+    def __init__(self, stop_distance_mm=None):
         self.stop_distance_mm = stop_distance_mm
 
         if config.USE_GPIO:
