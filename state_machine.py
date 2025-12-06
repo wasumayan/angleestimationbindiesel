@@ -4,64 +4,41 @@ Manages system states and transitions for Bin Diesel workflow
 """
 
 import time
-from enum import Enum
+from enum import Enum, auto
+import config
 
 
 class State(Enum):
     """System states"""
-    IDLE = "idle"  # Waiting for wake word
-    ACTIVE = "active"  # Awake, waiting for mode selection
-    TRACKING_USER = "tracking_user"  # Detecting and tracking user
-    FOLLOWING_USER = "following_user"  # Moving toward user
-    STOPPED = "stopped"  # At target distance, waiting
-    RETURNING_TO_START = "returning_to_start"  # Navigating back
-    MANUAL_MODE = "manual_mode"  # Waiting for voice commands
-    EXECUTING_COMMAND = "executing_command"  # Executing manual command
+    IDLE = auto() 
+    DRIVING_TO_USER = auto()
+    STOPPED_AT_USER = auto()
+    RETURNING = auto()
 
 
 class StateMachine:
-    """Manages system state and transitions"""
-    
-    def __init__(self, tracking_timeout=30.0):
-        """
-        Initialize state machine
-        
-        Args:
-            tracking_timeout: Seconds before returning to idle if no user detected
-        """
+    def __init__(self):
         self.state = State.IDLE
-        self.tracking_timeout = tracking_timeout
-        self.state_start_time = time.time()
-        self.start_position = None  # Store starting position for return navigation
-        
-        print(f"[StateMachine] Initialized, starting in {self.state.value}")
+        self.state_enter_time = time.time()
+
+        self.forward_start_time = None
+        self.forward_elapsed_time = 0.0 
+
+        if config.DEBUG_STATE:
+            print(f"[SM] initial state: {self.state.name}")
     
-    def transition_to(self, new_state):
-        """
-        Transition to new state
-        
-        Args:
-            new_state: New State enum value
-        """
-        if new_state != self.state:
-            old_state = self.state
-            self.state = new_state
-            self.state_start_time = time.time()
-            print(f"[StateMachine] Transition: {old_state.value} → {new_state.value}")
-    
+
     def get_state(self):
-        """Get current state"""
         return self.state
     
     def get_time_in_state(self):
-        """Get time spent in current state (seconds)"""
-        return time.time() - self.state_start_time
+        return time.time() - self.state_enter_time
     
-    def is_timeout(self):
-        """Check if tracking timeout has been reached"""
-        if self.state in [State.TRACKING_USER, State.FOLLOWING_USER]:
-            return self.get_time_in_state() > self.tracking_timeout
-        return False
+    def transition_to(self, new_state: State):
+        if config.DEBUG_STATE:
+            print(f"[SM] {self.state.name} -> {new_state.name}")
+        self.state = new_state
+        self.state_enter_time = time.time()
     
     def set_start_position(self, position):
         """
