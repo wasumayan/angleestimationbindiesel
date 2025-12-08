@@ -8,8 +8,8 @@ USE_GPIO = True    # disables GPIO for local testing
 
 # GPIO Pin Assignments
 MOTOR_PWM_PIN = 12  # GPIO12 pin 32 motor speed control
-SERVO_PWM_PIN = 19  # GPIO 19 for servo steering control
-ToF_DIGITAL_PIN = 10 # SET THIS 
+SERVO_PWM_PIN = 13  # GPIO13 pin 33 for servo steering control
+ToF_DIGITAL_PIN = 23 # GPIO23 pin 16 
 
 ToF_ACTIVE_HIGH = True 
 
