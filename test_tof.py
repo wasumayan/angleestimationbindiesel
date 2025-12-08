@@ -14,7 +14,7 @@ def main():
 
     tof = ToFSensor()
 
-    print(f"ToF initial state", tof.state())
+    print(f"ToF initial state", tof.detect())
 
 
 if __name__ == '__main__':
