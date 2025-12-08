@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Bin Diesel Minimal Main Control System
 Version: camera + wake word + TOF digital + PWM out
@@ -18,7 +17,7 @@ from wake_word_detector import WakeWordDetector
 from visual_detector import VisualDetector
 from motor_controller import MotorController
 from servo_controller import ServoController
-from tof_sensor import TOFSensor
+from tof_sensor import ToFSensor
 
 
 class BinDieselSystem:

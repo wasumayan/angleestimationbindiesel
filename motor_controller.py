@@ -14,7 +14,7 @@ else: GPIO = ModelGPIO()
 
 
 class MotorController:
-    def _init_(self, pwm_pin, frequency): # what is self, exactly?
+    def __init__(self, pwm_pin, frequency): # what is self, exactly?
         self.pwm_pin = pwm_pin
         self.frequency = frequency        # set correct f?
         self.pwm = None 

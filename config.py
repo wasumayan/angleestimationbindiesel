@@ -3,13 +3,15 @@ Configuration file for Bin Diesel system
 Modify GPIO pins, PWM values, and thresholds here
 """
 
-USE_GPIO = False    # disables GPIO for local testing
+USE_GPIO = True    # disables GPIO for local testing
 
 
 # GPIO Pin Assignments
 MOTOR_PWM_PIN = 18  # GPIO 18 for motor speed control
 SERVO_PWM_PIN = 19  # GPIO 19 for servo steering control
-Tof_DIGITAL_PIN = 10 # SET THIS 
+ToF_DIGITAL_PIN = 10 # SET THIS 
+
+ToF_ACTIVE_HIGH = True 
 
 # State machine behavior timing
 STOP_SECONDS = 2.0      # pause time at user

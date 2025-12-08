@@ -13,25 +13,24 @@ if config.USE_GPIO:
 else: GPIO = ModelGPIO(); 
 
 class ToFSensor:
-    def __init__(self, stop_distance_mm=None):
-        self.stop_distance_mm = stop_distance_mm
+    def __init__(self):
 
         if config.USE_GPIO:
-            GPIO.setmode(GPIO.BCM))
+            GPIO.setmode(GPIO.BCM)
             GPIO.setup(config.ToF_DIGITAL_PIN, GPIO.IN)
 
         if config.DEBUG_TOF:
-            print(f"[ToF] Initialized digital input on pin {config.Tof_DIGITAL_PIN}")
+            print(f"[ToF] Initialized digital input on pin {config.ToF_DIGITAL_PIN}")
 
-    def _state(self) -> bool:
+    def state(self) -> bool:
         if not config.USE_GPIO:
             return False 
         
-        val = bool(GPIO.input(config.Tof_DIGITAL_PIN))
+        val = bool(GPIO.input(config.ToF_DIGITAL_PIN))
         return val if config.ToF_ACTIVE_HIGH else not val 
     
     def detect(self) -> bool: 
-        state = self._state()
+        state = self.state()
 
         if config.DEBUG_TOF:
             print(f"[TOF] detect -> {state}")
