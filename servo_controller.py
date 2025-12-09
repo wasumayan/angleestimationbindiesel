@@ -40,10 +40,10 @@ class ServoController:
 
     def _set_duty(self, duty):
 
-        if duty < self.left_max_duty:
+        if duty > self.left_max_duty:
             duty = self.left_max_duty
 
-        if duty > self.right_max_duty:
+        if duty < self.right_max_duty:
             duty = self.right_max_duty
 
         if config.USE_GPIO and self.pwm:
