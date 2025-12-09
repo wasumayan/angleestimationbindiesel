@@ -79,15 +79,18 @@ class BinDieselSystem:
         """
         IDLE: wait for wake word.
         """
-        print({self.sm.get_state()})
-        self.motor.stop()
-        self.servo.center()
+        if not self.motor.stop(): 
+            self.motor.stop()
+        
+        if not self.servo.center():
+            self.servo.center()
 
         if self.wake.detect():
-            print("[Main] Wake word detected.")
+            print("[Main] Wake word detected!")
            
+            if not self.servo.center():   
+                self.servo.center()
            
-            self.servo.center()
             self.motor.forward(1.0)
 
             self.sm.forward_start_time = time.time()
@@ -96,18 +99,21 @@ class BinDieselSystem:
     def handle_driving_to_user(self):
         """
         DRIVING_TO_USER: follow the person using camera angle.
-        Stop when TOF digital says "close enough".
+        Stop when TOF digital triggers.
         """
-        print({self.sm.get_state()})
         # Update vision
         result = self.visual.update()
 
         if result["person_detected"]:
             angle = result["angle"] or 0.0
+
+            if angle is not None:
+                print(f"Person at: {angle:.1f}")
+
             self.servo.set_angle(angle)
         else:
-            # If we lose the person, you might just center servo
-            self.servo.center()
+            # If we lose the person, slow down
+            self.motor.forward(0.2)
 
         # Check TOF
         if self.tof.detect():
@@ -129,7 +135,6 @@ class BinDieselSystem:
         """
         STOPPED_AT_USER: wait fixed time, then start returning.
         """
-        print({self.sm.get_state()})
         t = self.sm.get_time_in_state()
         if t == 0:
             # just entered
@@ -153,7 +158,6 @@ class BinDieselSystem:
         RETURNING: drive back for same time we drove forward (plus margin),
         then stop and go to IDLE.
         """
-        print({self.sm.get_state()})
         
         elapsed = time.time() - self.return_start_time
         total = self.sm.forward_elapsed_time + config.RETURN_MARGIN
