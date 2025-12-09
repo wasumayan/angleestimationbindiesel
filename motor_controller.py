@@ -39,7 +39,7 @@ class MotorController:
 
     def stop(self):
         if config.USE_GPIO and self.pwm:
-            self.pwm.ChangeDutyCycle(0.0)
+            self.pwm.ChangeDutyCycle(config.MOTOR_STOP)
 
         if config.DEBUG_MOTOR:
             print("[Motor] stop()")
