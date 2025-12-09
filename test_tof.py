@@ -17,8 +17,8 @@ def main():
 
     start = time.time()
     while time.time() - start < 10.0:
-        state = tof.state()
-        print(f"ToF state: {state}")
+        state = tof.detect()
+        print(f"Iteration {time.time()}, ToF state: {state}")
         time.sleep(0.1)
 
     print("\nDone :p")
