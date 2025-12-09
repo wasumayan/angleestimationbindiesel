@@ -59,9 +59,9 @@ class BinDieselSystem:
         self.servo = ServoController(
             pwm_pin=config.SERVO_PWM_PIN,
             frequency=config.PWM_FREQUENCY_SERVO,
-            center_duty=config.SERVO_CENTER_DUTY,
-            left_max_duty=config.SERVO_LEFT_MAX_DUTY,
-            right_max_duty=config.SERVO_RIGHT_MAX_DUTY
+            center_duty=config.SERVO_CENTER,
+            left_max_duty=config.SERVO_LEFT_MAX,
+            right_max_duty=config.SERVO_RIGHT_MAX
         )
         self.servo.center()
 
