@@ -162,13 +162,35 @@ class VisualDetector:
     
     def get_frame(self):
         """
-        Get current camera frame
+        Get current camera frame with rotation and color correction
         
         Returns:
             Frame in BGR format (for OpenCV processing)
         """
         array = self.picam2.capture_array()  # Returns RGB
-        frame = cv2.cvtColor(array, cv2.COLOR_RGB2BGR)  # Convert to BGR
+        
+        # Apply camera rotation if configured
+        if config.CAMERA_ROTATION == 180:
+            array = cv2.rotate(array, cv2.ROTATE_180)
+        elif config.CAMERA_ROTATION == 90:
+            array = cv2.rotate(array, cv2.ROTATE_90_CLOCKWISE)
+        elif config.CAMERA_ROTATION == 270:
+            array = cv2.rotate(array, cv2.ROTATE_90_COUNTERCLOCKWISE)
+        
+        # Apply flips if configured
+        if config.CAMERA_FLIP_HORIZONTAL:
+            array = cv2.flip(array, 1)  # Horizontal flip
+        if config.CAMERA_FLIP_VERTICAL:
+            array = cv2.flip(array, 0)  # Vertical flip
+        
+        # Fix color channel swap (red/blue) - swap before converting to BGR
+        if config.CAMERA_SWAP_RB:
+            # Swap red and blue channels: RGB -> BGR -> RGB (swaps R and B)
+            array = cv2.cvtColor(array, cv2.COLOR_RGB2BGR)
+            array = cv2.cvtColor(array, cv2.COLOR_BGR2RGB)
+        
+        # Convert to BGR for OpenCV
+        frame = cv2.cvtColor(array, cv2.COLOR_RGB2BGR)
         return frame
     
     def calculate_angle(self, person_box):

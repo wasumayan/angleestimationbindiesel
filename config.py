@@ -35,6 +35,10 @@ SERVO_RIGHT_MAX = 89.318 # 10% = full right
 # Visual Detection Configuration
 CAMERA_WIDTH = 640
 CAMERA_HEIGHT = 480
+CAMERA_ROTATION = 180  # Rotate camera 180 degrees (0, 90, 180, 270) - set to 180 if camera is upside down
+CAMERA_FLIP_HORIZONTAL = False  # Flip horizontally (mirror)
+CAMERA_FLIP_VERTICAL = False  # Flip vertically
+CAMERA_SWAP_RB = True  # Swap red and blue channels (fixes color swap issue)
 YOLO_MODEL = 'yolo11n.pt'  # YOLO nano model for speed (object detection)
 YOLO_POSE_MODEL = 'yolo11n-pose.pt'  # YOLO pose model (for pose estimation + tracking)
 YOLO_CONFIDENCE = 0.25
