@@ -744,6 +744,17 @@ def main():
         )
         print("[TEST] RADD detector initialized")
         
+        # Initialize YOLO pose tracker for person detection
+        print("[TEST] Initializing YOLO pose tracker for person detection...")
+        from test_yolo_pose_tracking import YOLOPoseTracker
+        pose_tracker = YOLOPoseTracker(
+            model_path=config.YOLO_POSE_MODEL,
+            width=config.CAMERA_WIDTH,
+            height=config.CAMERA_HEIGHT,
+            confidence=config.YOLO_CONFIDENCE
+        )
+        print("[TEST] YOLO pose tracker initialized")
+        
         # Initialize camera
         print("[TEST] Initializing camera...")
         picam2 = Picamera2()
@@ -786,8 +797,19 @@ def main():
                 frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             
-            # Detect violations
-            violations = detector.detect_violations(frame)
+            # Detect persons using pose tracker
+            results, _ = pose_tracker.detect(frame)
+            tracked_persons = {}
+            for pose in results.get('poses', []):
+                track_id = pose.get('track_id')
+                if track_id is not None:
+                    tracked_persons[track_id] = {
+                        'box': pose.get('box'),
+                        'keypoints': pose.get('keypoints')
+                    }
+            
+            # Detect violations for tracked persons
+            violations = detector.detect_violations_for_tracked_persons(frame, tracked_persons)
             
             # Draw overlay
             annotated_frame = detector.draw_overlay(frame, violations.get('tracked_violators', {}))
@@ -812,13 +834,20 @@ def main():
             if key == ord('q') or key == 27:  # 'q' or ESC
                 break
             
-            # Print violations to terminal periodically
-            if violations.get('violations_detected'):
-                for track_id, violation_data in violations.get('tracked_violators', {}).items():
-                    if violation_data.get('violation_detected'):
-                        print(f"[TEST] Violation detected! Track ID: {track_id}")
-                        print(f"  - No full pants: {violation_data.get('no_full_pants', False)}")
-                        print(f"  - No closed-toe shoes: {violation_data.get('no_closed_toe_shoes', False)}")
+            # Print violations to terminal periodically (only print once per violator)
+            if len(violations.get('violators', [])) > 0:
+                for track_id in violations.get('violators', []):
+                    violation_data = violations.get('tracked_violators', {}).get(track_id, {})
+                    if violation_data:
+                        # Only print if this is a new detection (not already printed)
+                        if not hasattr(main, '_printed_violators'):
+                            main._printed_violators = set()
+                        if track_id not in main._printed_violators:
+                            main._printed_violators.add(track_id)
+                            print(f"[TEST] Violation detected! Track ID: {track_id}")
+                            print(f"  - No full pants: {violation_data.get('no_full_pants', False)}")
+                            print(f"  - No closed-toe shoes: {violation_data.get('no_closed_toe_shoes', False)}")
+                            print(f"  - Confidence: {violation_data.get('confidence', 0.0):.2f}")
     
     except KeyboardInterrupt:
         print("\n[TEST] Interrupted by user")
@@ -829,6 +858,8 @@ def main():
     finally:
         if 'picam2' in locals():
             picam2.stop()
+        if 'pose_tracker' in locals():
+            pose_tracker.stop()
         cv2.destroyAllWindows()
         print("[TEST] Test complete")
 
