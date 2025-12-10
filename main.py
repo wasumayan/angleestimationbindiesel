@@ -39,6 +39,7 @@ class BinDieselSystem:
         
         # Initialize control flags early to prevent AttributeError
         self.running = True
+        self._wake_word_stopped = False  # Track if wake word detector has been stopped
         
         log_info(self.logger, "=" * 70)
         log_info(self.logger, "Bin Diesel System Initializing...")
@@ -262,14 +263,30 @@ class BinDieselSystem:
     
     def handle_idle_state(self):
         """Handle IDLE state - waiting for wake word"""
+        # Restart wake word detector if it was stopped (e.g., returning from other states)
+        if hasattr(self, '_wake_word_stopped') and self._wake_word_stopped:
+            try:
+                self.wake_word.start_listening()
+                self._wake_word_stopped = False
+                log_info(self.logger, "Wake word detector restarted")
+            except Exception as e:
+                log_warning(self.logger, f"Failed to restart wake word detector: {e}", "IDLE state")
+        
         if self.wake_word.detect():
             self.sm.transition_to(State.ACTIVE)
             print("[Main] System activated!")
             if self.debug_mode:
                 print("[Main] DEBUG: Wake word detected, transitioning to ACTIVE")
             
+            # Stop wake word detector - no longer needed once in automatic mode
+            try:
+                self.wake_word.stop()
+                self._wake_word_stopped = True
+                log_info(self.logger, "Wake word detector stopped (entering automatic mode)")
+            except Exception as e:
+                log_warning(self.logger, f"Error stopping wake word detector: {e}", "State transition")
+            
             # Now that wake word is detected, initialize voice recognizer
-            # (wake word detector keeps its stream open, but voice recognizer can be initialized for commands)
             if not self._voice_initialized:
                 self._ensure_voice_initialized()
     
@@ -368,14 +385,13 @@ class BinDieselSystem:
             }
         
         if not result['person_detected']:
-            # User lost - check timeout
-            if self.sm.is_timeout():
-                conditional_log(self.logger, 'info', 
-                              "User tracking timeout, returning to idle",
-                              config.DEBUG_MODE)
-                self.sm.transition_to(State.IDLE)
-                self.motor.stop()
-                self.servo.center()
+            # User lost - stop car and revert to tracking state to search for user
+            conditional_log(self.logger, 'info', 
+                          "User lost, stopping and searching...",
+                          config.DEBUG_MODE)
+            self.motor.stop()
+            self.servo.center()
+            # Stay in TRACKING_USER state to continue searching
             return
         
         if result['arm_raised']:
@@ -427,14 +443,14 @@ class BinDieselSystem:
             }
         
         if not result['person_detected']:
-            # User lost
-            if self.sm.is_timeout():
-                conditional_log(self.logger, 'info',
-                              "User lost, returning to idle",
-                              config.DEBUG_MODE)
-                self.sm.transition_to(State.IDLE)
-                self.motor.stop()
-                self.servo.center()
+            # User lost - stop car and revert to tracking state to search for user
+            conditional_log(self.logger, 'info',
+                          "User lost during following, stopping and searching...",
+                          config.DEBUG_MODE)
+            self.motor.stop()
+            self.servo.center()
+            # Revert to TRACKING_USER state to search for user again
+            self.sm.transition_to(State.TRACKING_USER)
             return
         
         # Check if user is too close (TOF sensor) - only if emergency stop is enabled
