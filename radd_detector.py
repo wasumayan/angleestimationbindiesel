@@ -92,6 +92,11 @@ class RADDDetector:
                 elif 'shoe' in class_name_lower or 'footwear' in class_name_lower:
                     self.clothing_classes['shoes'] = class_id
             
+            # If no classes were mapped, set to None to ensure fallback works
+            # (Empty dict {} is falsy, but None is more explicit)
+            if not self.clothing_classes:
+                self.clothing_classes = None
+            
             self.logger.info(f"Clothing model classes: {model_names}")
             self.logger.info(f"Mapped classes: {self.clothing_classes}")
         
@@ -399,17 +404,25 @@ class RADDDetector:
                 }
                 
                 # Map using class indices (more reliable)
+                # Try mapping first, then fallback to string matching if mapping incomplete
+                mapped = False
                 if self.clothing_classes:
-                    if class_id == self.clothing_classes.get('clothing'):
+                    # Check each category - only use mapping if key exists in dictionary
+                    if 'clothing' in self.clothing_classes and class_id == self.clothing_classes['clothing']:
                         detections['clothing'].append(detection_data)
-                    elif class_id == self.clothing_classes.get('shoes'):
+                        mapped = True
+                    elif 'shoes' in self.clothing_classes and class_id == self.clothing_classes['shoes']:
                         detections['shoes'].append(detection_data)
-                    elif class_id == self.clothing_classes.get('bags'):
+                        mapped = True
+                    elif 'bags' in self.clothing_classes and class_id == self.clothing_classes['bags']:
                         detections['bags'].append(detection_data)
-                    elif class_id == self.clothing_classes.get('accessories'):
+                        mapped = True
+                    elif 'accessories' in self.clothing_classes and class_id == self.clothing_classes['accessories']:
                         detections['accessories'].append(detection_data)
-                else:
-                    # Fallback: string matching (less reliable)
+                        mapped = True
+                
+                # Fallback to string matching if not mapped (handles incomplete mappings)
+                if not mapped:
                     if 'cloth' in class_name:
                         detections['clothing'].append(detection_data)
                     elif 'shoe' in class_name or 'footwear' in class_name:
