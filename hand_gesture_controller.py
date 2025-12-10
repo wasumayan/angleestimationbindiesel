@@ -389,7 +389,8 @@ if __name__ == '__main__':
         print("[TEST] Start gesturing...")
         print()
         
-        import cv2
+        # Start OpenCV window thread
+        cv2.startWindowThread()
         
         while True:
             frame = controller.get_frame()
