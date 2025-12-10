@@ -389,17 +389,40 @@ if __name__ == '__main__':
         print("[TEST] Start gesturing...")
         print()
         
+        import cv2
+        
         while True:
-            command = controller.detect_command(controller.get_frame())
+            frame = controller.get_frame()
+            command = controller.detect_command(frame)
+            
+            # Draw detection info on frame
+            frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+            
+            # Add text overlay
+            cv2.putText(frame_bgr, "Hand Gesture Controller", (10, 30),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
             
             if command:
+                cv2.putText(frame_bgr, f"Command: {command}", (10, 60),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
                 print(f"[TEST] Command detected: {command}")
+            else:
+                cv2.putText(frame_bgr, "No command", (10, 60),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+            
+            # Show frame
+            cv2.imshow("Hand Gesture Controller", frame_bgr)
+            
+            # Break on 'q' key
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
             
             time.sleep(0.1)  # Check 10 times per second
     
     except KeyboardInterrupt:
         print("\n[TEST] Stopping...")
     finally:
+        cv2.destroyAllWindows()
         if 'controller' in locals():
             controller.stop()
 
