@@ -53,6 +53,7 @@ class YOLOPoseTracker:
         self.confidence = confidence
         self.frame_center_x = width // 2
         self.debug_mode = config.DEBUG_MODE
+        self._frame_counter = 0; 
         
         # Initialize YOLO pose model
         print(f"[YOLOPoseTracker] Loading YOLO pose model: {model_path}...")
@@ -478,7 +479,7 @@ def draw_detections(frame, yolo_result, results):
     """
     Draw detection results using YOLO's default overlay + custom arm angle info
     
-    Args:
+    Args:s
         frame: RGB frame
         yolo_result: YOLO result object (for default overlay)
         results: Detection results dict (for arm angle info)
