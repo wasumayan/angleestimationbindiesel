@@ -134,8 +134,8 @@ class BinDieselSystem:
         print("\n[Main] Initializing hand gesture controller...")
         try:
             self.gesture_controller = HandGestureController(
-                hand_model_path=config.HAND_MODEL_PATH,
-                pose_model_path=config.YOLO_POSE_MODEL,
+                hand_model_path=config.YOLO_HAND_MODEL,  # Use trained hand-keypoints model if available
+                pose_model_path=config.YOLO_POSE_MODEL,  # Fallback to pose model
                 width=config.CAMERA_WIDTH,
                 height=config.CAMERA_HEIGHT,
                 confidence=config.YOLO_CONFIDENCE,

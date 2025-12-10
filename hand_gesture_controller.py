@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
 """
 Hand Gesture Controller for Manual Mode
-Uses YOLO hand keypoints model for precise hand gesture detection
+Uses YOLO hand-keypoints model for precise hand gesture detection
 Works alongside voice commands - both input methods are supported
 Optimized for speed and efficiency
 
-Note: Requires a YOLO model trained on hand-keypoints dataset.
-Train with: yolo pose train data=hand-keypoints.yaml model=yolo11n-pose.pt epochs=100
-Or use a pre-trained hand keypoints model if available.
+Gestures:
+- Turn right: Point thumb to the right
+- Turn left: Point thumb to the left
+- Stop: Palm up facing camera
+- Move forward: Thumbs up
+
+Training: yolo pose train data=hand-keypoints.yaml model=yolo11n-pose.pt epochs=100 imgsz=640
+Reference: https://docs.ultralytics.com/datasets/pose/hand-keypoints/
 """
 
 import cv2
@@ -30,9 +35,11 @@ import config
 
 class HandGestureController:
     """
-    Hand gesture controller using YOLO hand keypoints model
-    Uses hand-keypoints dataset model (21 keypoints per hand)
+    Hand gesture controller using YOLO hand-keypoints model
+    Uses YOLO pose model trained on hand-keypoints dataset (21 keypoints per hand)
     Reference: https://docs.ultralytics.com/datasets/pose/hand-keypoints/
+    
+    Training: yolo pose train data=hand-keypoints.yaml model=yolo11n-pose.pt epochs=100 imgsz=640
     """
     
     # Gesture to command mapping
@@ -40,33 +47,57 @@ class HandGestureController:
         'stop': 'STOP',
         'turn_left': 'LEFT',
         'turn_right': 'RIGHT',
-        'turn_around': 'TURN_AROUND',
-        'come': 'FORWARD',  # Beckoning = come forward
-        'go_away': 'TURN_AROUND'  # Waving away = turn around
+        'thumbs_up': 'FORWARD'  # Thumbs up = move forward
     }
     
-    # Hand keypoint indices (21 keypoints per hand)
+    # YOLO hand keypoint indices (21 keypoints per hand)
+    # From hand-keypoints.yaml:
     # 0: wrist
-    # 1-4: thumb (cmc, mcp, ip, tip)
-    # 5-8: index (mcp, pip, dip, tip)
-    # 9-12: middle (mcp, pip, dip, tip)
-    # 13-16: ring (mcp, pip, dip, tip)
-    # 17-20: pinky (mcp, pip, dip, tip)
+    # 1: thumb_cmc
+    # 2: thumb_mcp
+    # 3: thumb_ip
+    # 4: thumb_tip
+    # 5: index_mcp
+    # 6: index_pip
+    # 7: index_dip
+    # 8: index_tip
+    # 9: middle_mcp
+    # 10: middle_pip
+    # 11: middle_dip
+    # 12: middle_tip
+    # 13: ring_mcp
+    # 14: ring_pip
+    # 15: ring_dip
+    # 16: ring_tip
+    # 17: pinky_mcp
+    # 18: pinky_pip
+    # 19: pinky_dip
+    # 20: pinky_tip
     WRIST = 0
-    THUMB_TIP = 4
-    INDEX_TIP = 8
-    MIDDLE_TIP = 12
-    RING_TIP = 16
-    PINKY_TIP = 20
+    THUMB_CMC = 1
+    THUMB_MCP = 2
     THUMB_IP = 3
+    THUMB_TIP = 4
+    INDEX_MCP = 5
     INDEX_PIP = 6
+    INDEX_DIP = 7
+    INDEX_TIP = 8
+    MIDDLE_MCP = 9
     MIDDLE_PIP = 10
+    MIDDLE_DIP = 11
+    MIDDLE_TIP = 12
+    RING_MCP = 13
     RING_PIP = 14
+    RING_DIP = 15
+    RING_TIP = 16
+    PINKY_MCP = 17
     PINKY_PIP = 18
+    PINKY_DIP = 19
+    PINKY_TIP = 20
     
     def __init__(self, 
-                 hand_model_path=None,  # Path to hand keypoints model (trained on hand-keypoints.yaml)
-                 pose_model_path='yolo11n-pose.pt',  # Fallback: use pose model to find person first
+                 hand_model_path=None,  # Path to trained hand-keypoints model
+                 pose_model_path='yolo11n-pose.pt',  # Fallback: use pose model
                  width=640,
                  height=480,
                  confidence=0.25,
@@ -76,18 +107,17 @@ class HandGestureController:
         
         Args:
             hand_model_path: Path to YOLO model trained on hand-keypoints dataset
-                           If None, uses two-stage: pose model to find person, then hand detection
-            pose_model_path: Path to YOLO pose model (for person detection if hand_model not available)
+                           If None, uses pose model as fallback (less accurate)
+            pose_model_path: Path to YOLO pose model (fallback if hand model not available)
             width: Camera width
             height: Camera height
-            confidence: Detection confidence threshold
+            confidence: Detection confidence threshold (0.0-1.0)
             gesture_hold_time: Seconds gesture must be held before executing
         """
         self.width = width
         self.height = height
         self.confidence = confidence
         self.gesture_hold_time = gesture_hold_time
-        self.frame_center_x = width // 2
         
         # Initialize hand keypoints model (if available)
         self.hand_model = None
@@ -98,14 +128,17 @@ class HandGestureController:
                 print("[HandGestureController] Hand keypoints model loaded")
             except Exception as e:
                 print(f"[HandGestureController] WARNING: Failed to load hand model: {e}")
+                print("[HandGestureController] Falling back to pose model")
                 self.hand_model = None
         
-        # Initialize pose model (for person detection if hand model not available)
+        # Initialize pose model (for fallback if hand model not available)
         if not self.hand_model:
-            print(f"[HandGestureController] Using pose model for person detection: {pose_model_path}...")
+            print(f"[HandGestureController] Using pose model (fallback mode): {pose_model_path}...")
+            print("[HandGestureController] NOTE: For better accuracy, train a hand-keypoints model:")
+            print("  yolo pose train data=hand-keypoints.yaml model=yolo11n-pose.pt epochs=100 imgsz=640")
             try:
                 self.pose_model = YOLO(pose_model_path)
-                print("[HandGestureController] Pose model loaded (fallback mode)")
+                print("[HandGestureController] Pose model loaded")
             except Exception as e:
                 print(f"[HandGestureController] WARNING: Failed to load pose model: {e}")
                 self.pose_model = YOLO('yolo11n-pose.pt')  # Auto-download
@@ -163,146 +196,97 @@ class HandGestureController:
     
     def detect_gesture_from_hand_keypoints(self, keypoints):
         """
-        Detect hand gesture from hand keypoints (21 keypoints per hand)
+        Detect hand gesture from YOLO hand keypoints (21 keypoints per hand)
         
         Args:
             keypoints: YOLO hand keypoints array [21, 3] (x, y, confidence)
+                      Format: [[x1, y1, conf1], [x2, y2, conf2], ...]
             
         Returns:
             Gesture name or None
         """
-        # Check if keypoints are visible
-        if keypoints[self.WRIST][2] < 0.5:  # Wrist not visible
+        # Check if keypoints are visible (confidence threshold)
+        if keypoints[self.WRIST][2] < 0.4:  # Wrist not visible
             return None
         
-        # Get keypoint positions
-        wrist = np.array([keypoints[self.WRIST][0], keypoints[self.WRIST][1]])
-        thumb_tip = np.array([keypoints[self.THUMB_TIP][0], keypoints[self.THUMB_TIP][1]])
-        index_tip = np.array([keypoints[self.INDEX_TIP][0], keypoints[self.INDEX_TIP][1]])
-        middle_tip = np.array([keypoints[self.MIDDLE_TIP][0], keypoints[self.MIDDLE_TIP][1]])
-        ring_tip = np.array([keypoints[self.RING_TIP][0], keypoints[self.RING_TIP][1]])
-        pinky_tip = np.array([keypoints[self.PINKY_TIP][0], keypoints[self.PINKY_TIP][1]])
+        # Get keypoint positions (pixel coordinates)
+        wrist = np.array([keypoints[self.WRIST][0], keypoints[self.WRIST][1]], dtype=np.float32)
+        thumb_tip = np.array([keypoints[self.THUMB_TIP][0], keypoints[self.THUMB_TIP][1]], dtype=np.float32)
+        thumb_ip = np.array([keypoints[self.THUMB_IP][0], keypoints[self.THUMB_IP][1]], dtype=np.float32)
+        index_tip = np.array([keypoints[self.INDEX_TIP][0], keypoints[self.INDEX_TIP][1]], dtype=np.float32)
+        index_pip = np.array([keypoints[self.INDEX_PIP][0], keypoints[self.INDEX_PIP][1]], dtype=np.float32)
+        middle_tip = np.array([keypoints[self.MIDDLE_TIP][0], keypoints[self.MIDDLE_TIP][1]], dtype=np.float32)
+        middle_pip = np.array([keypoints[self.MIDDLE_PIP][0], keypoints[self.MIDDLE_PIP][1]], dtype=np.float32)
+        ring_tip = np.array([keypoints[self.RING_TIP][0], keypoints[self.RING_TIP][1]], dtype=np.float32)
+        ring_pip = np.array([keypoints[self.RING_PIP][0], keypoints[self.RING_PIP][1]], dtype=np.float32)
+        pinky_tip = np.array([keypoints[self.PINKY_TIP][0], keypoints[self.PINKY_TIP][1]], dtype=np.float32)
+        pinky_pip = np.array([keypoints[self.PINKY_PIP][0], keypoints[self.PINKY_PIP][1]], dtype=np.float32)
         
-        thumb_ip = np.array([keypoints[self.THUMB_IP][0], keypoints[self.THUMB_IP][1]])
-        index_pip = np.array([keypoints[self.INDEX_PIP][0], keypoints[self.INDEX_PIP][1]])
-        middle_pip = np.array([keypoints[self.MIDDLE_PIP][0], keypoints[self.MIDDLE_PIP][1]])
-        ring_pip = np.array([keypoints[self.RING_PIP][0], keypoints[self.RING_PIP][1]])
-        pinky_pip = np.array([keypoints[self.PINKY_PIP][0], keypoints[self.PINKY_PIP][1]])
+        # Check keypoint visibility
+        if (keypoints[self.THUMB_TIP][2] < 0.4 or keypoints[self.INDEX_TIP][2] < 0.4 or
+            keypoints[self.MIDDLE_TIP][2] < 0.4 or keypoints[self.RING_TIP][2] < 0.4 or
+            keypoints[self.PINKY_TIP][2] < 0.4):
+            return None
         
-        # Check if fingers are extended (tip above PIP joint)
-        thumb_extended = thumb_tip[1] < thumb_ip[1] - 0.02
-        index_extended = index_tip[1] < index_pip[1] - 0.02
-        middle_extended = middle_tip[1] < middle_pip[1] - 0.02
-        ring_extended = ring_tip[1] < ring_pip[1] - 0.02
-        pinky_extended = pinky_tip[1] < pinky_pip[1] - 0.02
+        # Check if fingers are extended upward (tip.y < pip.y means extended upward)
+        # In image coordinates, Y increases downward
+        index_extended = index_tip[1] < index_pip[1] - 10  # 10 pixel threshold
+        middle_extended = middle_tip[1] < middle_pip[1] - 10
+        ring_extended = ring_tip[1] < ring_pip[1] - 10
+        pinky_extended = pinky_tip[1] < pinky_pip[1] - 10
         
-        # Count extended fingers
-        fingers_up = [thumb_extended, index_extended, middle_extended, ring_extended, pinky_extended]
-        num_fingers = sum(fingers_up)
+        # Thumb extension: check horizontal and vertical position relative to IP joint
+        thumb_horizontal_dist = thumb_tip[0] - thumb_ip[0]
+        thumb_vertical_dist = thumb_tip[1] - thumb_ip[1]
         
-        # Calculate hand direction (using middle finger)
-        hand_vector = middle_tip - wrist
-        hand_angle = np.arctan2(hand_vector[1], hand_vector[0]) * 180 / np.pi
+        # Determine thumb direction
+        thumb_points_right = thumb_horizontal_dist > 20  # Significant rightward movement (pixels)
+        thumb_points_left = thumb_horizontal_dist < -20  # Significant leftward movement (pixels)
+        thumb_points_up = thumb_vertical_dist < -15  # Thumb pointing up (pixels)
         
-        # Gesture recognition using finger states and hand direction
+        # Check if palm is facing camera (fingers extended upward)
+        # Palm facing camera = all finger tips are above wrist
+        palm_facing_camera = (index_tip[1] < wrist[1] - 20 and 
+                             middle_tip[1] < wrist[1] - 20 and 
+                             ring_tip[1] < wrist[1] - 20 and 
+                             pinky_tip[1] < wrist[1] - 20)
         
-        # STOP: All 5 fingers extended (open palm)
-        if num_fingers == 5:
+        # Gesture 1: STOP - Palm up facing camera
+        # All 4 fingers (index, middle, ring, pinky) extended upward, palm facing camera
+        if (palm_facing_camera and 
+            index_extended and middle_extended and ring_extended and pinky_extended):
             return 'stop'
         
-        # TURN_LEFT: Index finger extended, pointing left
-        if index_extended and not middle_extended and not ring_extended and not pinky_extended:
-            if -135 < hand_angle < -45:  # Pointing left
-                return 'turn_left'
+        # Gesture 2: THUMBS UP - Move forward
+        # Thumb extended upward, other fingers closed (not extended)
+        if (thumb_points_up and 
+            not index_extended and not middle_extended and not ring_extended and not pinky_extended):
+            return 'thumbs_up'
         
-        # TURN_RIGHT: Index finger extended, pointing right
-        if index_extended and not middle_extended and not ring_extended and not pinky_extended:
-            if 45 < hand_angle < 135:  # Pointing right
-                return 'turn_right'
+        # Gesture 3: TURN RIGHT - Thumb points right
+        # Thumb extended horizontally to the right
+        # Other fingers can be in any position (relaxed)
+        if thumb_points_right:
+            return 'turn_right'
         
-        # TURN_AROUND: Index finger extended, pointing backward/up
-        if index_extended and not middle_extended and not ring_extended and not pinky_extended:
-            if hand_angle < -135 or hand_angle > 135:  # Pointing backward
-                return 'turn_around'
-        
-        # COME (FORWARD): Thumb + index extended, pointing forward/down
-        if thumb_extended and index_extended and not middle_extended:
-            if -45 < hand_angle < 45:  # Pointing forward
-                return 'come'
-        
-        # GO_AWAY: All fingers extended but close together, pointing away
-        if num_fingers >= 4:
-            finger_tips = [index_tip, middle_tip, ring_tip, pinky_tip]
-            finger_distances = [np.linalg.norm(finger_tips[i] - finger_tips[i+1]) 
-                              for i in range(len(finger_tips)-1)]
-            avg_distance = np.mean(finger_distances)
-            
-            if avg_distance < 0.05:  # Fingers close together
-                if hand_angle < -135 or hand_angle > 135:  # Pointing away
-                    return 'go_away'
+        # Gesture 4: TURN LEFT - Thumb points left
+        # Thumb extended horizontally to the left
+        # Other fingers can be in any position (relaxed)
+        if thumb_points_left:
+            return 'turn_left'
         
         return None
     
-    def detect_gesture_from_pose(self, keypoints):
-        """
-        Fallback: Detect hand gesture from pose keypoints (when hand model not available)
-        
-        Args:
-            keypoints: YOLO pose keypoints array [17, 3]
-            
-        Returns:
-            Gesture name or None
-        """
-        # Get keypoints - swap left/right if camera is rotated
-        if config.CAMERA_SWAP_LEFT_RIGHT:
-            # When camera rotated 180°, swap left/right detection
-            left_wrist = keypoints[10]  # Swapped: use right_wrist for left detection
-            right_wrist = keypoints[9]  # Swapped: use left_wrist for right detection
-            left_shoulder = keypoints[6]  # Swapped
-            right_shoulder = keypoints[5]  # Swapped
-        else:
-            left_wrist = keypoints[9]
-            right_wrist = keypoints[10]
-            left_shoulder = keypoints[5]
-            right_shoulder = keypoints[6]
-        
-        gestures = []
-        
-        # Check left arm gestures (from user's perspective)
-        if left_wrist[2] > 0.5 and left_shoulder[2] > 0.5:
-            wrist_y = left_wrist[1] - left_shoulder[1]
-            wrist_x = left_wrist[0] - left_shoulder[0]
-            
-            if wrist_y < -60:
-                gestures.append('stop')
-            elif wrist_x < -50 and abs(wrist_y) < 30:
-                gestures.append('turn_left')
-            elif abs(wrist_x) < 30 and wrist_y < -20:
-                gestures.append('come')
-        
-        # Check right arm gestures (from user's perspective)
-        if right_wrist[2] > 0.5 and right_shoulder[2] > 0.5:
-            wrist_y = right_wrist[1] - right_shoulder[1]
-            wrist_x = right_wrist[0] - right_shoulder[0]
-            
-            if wrist_y < -60:
-                gestures.append('stop')
-            elif wrist_x > 50 and abs(wrist_y) < 30:
-                gestures.append('turn_right')
-            elif abs(wrist_x) < 30 and wrist_y < -20:
-                gestures.append('come')
-        
-        return gestures[0] if gestures else None
     
     def detect_command(self, frame):
         """
-        Detect command from hand gesture
+        Detect command from hand gesture using YOLO hand keypoints model
         
         Args:
             frame: RGB frame
             
         Returns:
-            Command string (FORWARD, LEFT, RIGHT, STOP, TURN_AROUND) or None
+            Command string (FORWARD, LEFT, RIGHT, STOP) or None
         """
         gesture = None
         
@@ -329,7 +313,10 @@ class HandGestureController:
                 if result.keypoints is not None and len(result.keypoints) > 0:
                     # Get first person's pose keypoints
                     pose_keypoints = result.keypoints.data[0].cpu().numpy()  # [17, 3]
-                    gesture = self.detect_gesture_from_pose(pose_keypoints)
+                    # Note: Pose model has wrist keypoints but not detailed hand keypoints
+                    # This is a basic fallback - for best results, train a hand-keypoints model
+                    # For now, we'll just return None if hand model isn't available
+                    pass
         
         if gesture is None:
             # Reset gesture tracking
@@ -398,25 +385,25 @@ if __name__ == '__main__':
     print("Hand Gesture Controller Test")
     print("=" * 70)
     print("Gestures:")
-    print("  - STOP: Raise hand(s) high above shoulder")
-    print("  - TURN_LEFT: Extend left hand to left side")
-    print("  - TURN_RIGHT: Extend right hand to right side")
-    print("  - FORWARD (COME): Extend hand forward (beckoning)")
-    print("  - TURN_AROUND (GO_AWAY): Extend hand backward/up")
+    print("  - STOP: Palm up facing camera (all fingers extended)")
+    print("  - TURN_LEFT: Point thumb to the left")
+    print("  - TURN_RIGHT: Point thumb to the right")
+    print("  - FORWARD: Thumbs up")
     print()
-    print("Press Ctrl+C to exit")
+    print("Press 'q' to exit or Ctrl+C to stop")
     print("=" * 70)
     print()
     
     try:
         # Try to use hand keypoints model if available
-        # Otherwise falls back to pose model
+        # Otherwise falls back to pose model (less accurate for hand gestures)
         controller = HandGestureController(
             hand_model_path=None,  # Set to path of trained hand-keypoints model if available
             pose_model_path='yolo11n-pose.pt',  # Fallback model
             width=config.CAMERA_WIDTH,
             height=config.CAMERA_HEIGHT,
-            confidence=config.YOLO_CONFIDENCE
+            confidence=config.YOLO_CONFIDENCE,
+            gesture_hold_time=0.5
         )
         
         print("[TEST] Controller initialized")
@@ -432,6 +419,15 @@ if __name__ == '__main__':
             
             # Draw detection info on frame
             frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+            
+            # Draw YOLO hand keypoints if available
+            if controller.hand_model:
+                results = controller.hand_model(frame, conf=controller.confidence, verbose=False)
+                if results and len(results) > 0:
+                    result = results[0]
+                    # Draw YOLO results (bounding boxes and keypoints)
+                    annotated_frame = result.plot()
+                    frame_bgr = annotated_frame
             
             # Add text overlay
             cv2.putText(frame_bgr, "Hand Gesture Controller", (10, 30),

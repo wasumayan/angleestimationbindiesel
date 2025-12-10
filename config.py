@@ -42,10 +42,25 @@ CAMERA_SWAP_RB = True  # Swap red and blue channels (fixes color swap issue)
 CAMERA_SWAP_LEFT_RIGHT = True  # Swap left/right arm detection (needed when camera is rotated 180°)
 YOLO_MODEL = 'yolo11n.pt'  # YOLO nano model for speed (object detection)
 YOLO_POSE_MODEL = 'yolo11n-pose.pt'  # YOLO pose model (for pose estimation + tracking)
+YOLO_HAND_MODEL = None  # Path to trained hand-keypoints model (e.g., 'runs/pose/hand_keypoints/weights/best.pt')
+                          # Train with: yolo pose train data=hand-keypoints.yaml model=yolo11n-pose.pt epochs=100
+                          # Or use: python train_hand_keypoints.py
+HAND_MODEL_PATH = YOLO_HAND_MODEL  # Alias for compatibility
+HAND_GESTURE_HOLD_TIME = 0.5  # Seconds gesture must be held before executing
 YOLO_CONFIDENCE = 0.25
 PERSON_CENTER_THRESHOLD = 30  # Pixels from center to consider "centered"
 ANGLE_TO_STEERING_GAIN = 0.5  # How much to turn based on angle
 TRACKING_TIMEOUT = 30.0  # Seconds before returning to idle if no user detected
+
+# Arm Angle Detection Configuration
+ARM_ANGLE_MIN = 55.0  # Minimum angle from vertical (degrees) - was 60
+ARM_ANGLE_MAX = 95.0  # Maximum angle from vertical (degrees) - was 90
+ARM_KEYPOINT_CONFIDENCE = 0.4  # Minimum keypoint confidence (lower = more lenient)
+ARM_MIN_HORIZONTAL_EXTENSION = 30  # Minimum horizontal extension in pixels
+ARM_HORIZONTAL_RATIO = 0.8  # Minimum horizontal/vertical ratio (0.8 = more horizontal)
+ARM_WRIST_ABOVE_SHOULDER_TOLERANCE = 30  # Pixels tolerance for wrist above shoulder
+ARM_ELBOW_ANGLE_MIN = 45.0  # Minimum elbow bend angle (degrees)
+ARM_ELBOW_ANGLE_MAX = 160.0  # Maximum elbow bend angle (degrees)
 
 # Motor Speed Configuration
 FOLLOW_SPEED = 0.6  # Speed when following user (0.0-1.0)
