@@ -312,9 +312,10 @@ class YOLOPoseTracker:
                 'is_centered': bool,
                 'arm_raised': bool,
                 'arm_confidence': float,
-                'track_id': int or None,  # New: tracking ID
-                'gesture': str or None  # New: detected gesture
+                'track_id': int or None  # Tracking ID
             }
+            
+            Note: Hand gestures are handled separately in hand_gesture_controller.py
         """
         frame = self.get_frame()
         results, _ = self.detect(frame)  # Ignore yolo_result for update() method
