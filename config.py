@@ -40,15 +40,23 @@ CAMERA_FLIP_HORIZONTAL = False  # Flip horizontally (mirror)
 CAMERA_FLIP_VERTICAL = False  # Flip vertically
 CAMERA_SWAP_RB = True  # Swap red and blue channels (fixes color swap issue)
 CAMERA_SWAP_LEFT_RIGHT = True  # Swap left/right arm detection (needed when camera is rotated 180°)
-YOLO_MODEL = 'yolo11n.pt'  # YOLO nano model for speed (object detection)
-YOLO_POSE_MODEL = 'yolo11n-pose.pt'  # YOLO pose model (for pose estimation + tracking)
-YOLO_OBB_MODEL = 'yolo11n-obb.pt'  # YOLO OBB model (oriented bounding boxes for trash detection)
+# YOLO Model Configuration
+# Use NCNN format for better performance on Raspberry Pi (ARM architecture)
+# Run convert_to_ncnn.py to convert PyTorch models to NCNN format
+USE_NCNN = True  # Set to False to use PyTorch models (.pt) instead of NCNN
+
+# Model paths (will use NCNN if USE_NCNN=True and NCNN model exists)
+YOLO_MODEL = 'yolo11n_ncnn_model' if USE_NCNN else 'yolo11n.pt'  # Object detection model
+YOLO_POSE_MODEL = 'yolo11n-pose_ncnn_model' if USE_NCNN else 'yolo11n-pose.pt'  # Pose estimation + tracking
+YOLO_OBB_MODEL = 'yolo11n-obb_ncnn_model' if USE_NCNN else 'yolo11n-obb.pt'  # Oriented bounding boxes
 YOLO_CLOTHING_MODEL = None  # Path to trained clothing detection model (for RADD mode)
                                   # See: https://github.com/kesimeg/YOLO-Clothing-Detection
                                   # Set to model path after training/downloading
-                                  # Example: 'models/clothing/best.pt'
+                                  # Example: 'models/clothing/best.pt' or 'models/clothing/best_ncnn_model'
 RADD_VIOLATION_TIMEOUT = 2.0  # Seconds before removing violator from tracking if not seen
-YOLO_HAND_MODEL = 'models/hand_keypoints/weights/best.pt' #YOLO for hand keypoints for manual mode!
+YOLO_HAND_MODEL = 'models/hand_keypoints/weights/best.pt'  # Hand keypoints for manual mode
+                                  # Note: Custom trained models need to be converted separately
+                                  # Example: 'models/hand_keypoints/weights/best_ncnn_model'
 HAND_MODEL_PATH = YOLO_HAND_MODEL  # Alias for compatibility
 HAND_GESTURE_HOLD_TIME = 0.5  # Seconds gesture must be held before executing
 YOLO_CONFIDENCE = 0.01  # Very low confidence for arm detection (confidence boundaries removed)

@@ -92,8 +92,18 @@ class BinDieselSystem:
         log_info(self.logger, "Initializing YOLO object detection for home marker...")
         try:
             from ultralytics import YOLO
-            self.home_marker_model = YOLO(config.YOLO_MODEL)  # Use object detection model
-            log_info(self.logger, "YOLO object detection model initialized for home marker")
+            try:
+                self.home_marker_model = YOLO(config.YOLO_MODEL)  # Try NCNN or PyTorch from config
+                log_info(self.logger, f"YOLO object detection model initialized: {config.YOLO_MODEL}")
+            except Exception as e1:
+                # Fallback: if NCNN failed, try PyTorch
+                if config.USE_NCNN and config.YOLO_MODEL.endswith('_ncnn_model'):
+                    fallback_path = config.YOLO_MODEL.replace('_ncnn_model', '.pt')
+                    log_info(self.logger, f"NCNN model not found, trying PyTorch: {fallback_path}")
+                    self.home_marker_model = YOLO(fallback_path)
+                    log_info(self.logger, f"PyTorch model loaded: {fallback_path}")
+                else:
+                    raise e1
         except Exception as e:
             log_warning(self.logger, f"Failed to initialize YOLO object detection: {e}", "Home marker detection will not work")
             self.home_marker_model = None

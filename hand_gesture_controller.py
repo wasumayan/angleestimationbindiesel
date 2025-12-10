@@ -125,8 +125,18 @@ class HandGestureController:
         if hand_model_path:
             print(f"[HandGestureController] Loading hand keypoints model: {hand_model_path}...")
             try:
-                self.hand_model = YOLO(hand_model_path)
-                print("[HandGestureController] Hand keypoints model loaded")
+                try:
+                    self.hand_model = YOLO(hand_model_path)
+                    print(f"[HandGestureController] Hand keypoints model loaded: {hand_model_path}")
+                except Exception as e1:
+                    # Fallback: if NCNN failed, try PyTorch
+                    if hand_model_path.endswith('_ncnn_model'):
+                        fallback_path = hand_model_path.replace('_ncnn_model', '.pt')
+                        print(f"[HandGestureController] NCNN model not found, trying PyTorch: {fallback_path}")
+                        self.hand_model = YOLO(fallback_path)
+                        print(f"[HandGestureController] PyTorch model loaded: {fallback_path}")
+                    else:
+                        raise e1
             except Exception as e:
                 print(f"[HandGestureController] WARNING: Failed to load hand model: {e}")
                 print("[HandGestureController] Falling back to pose model")
@@ -138,8 +148,18 @@ class HandGestureController:
             print("[HandGestureController] NOTE: For better accuracy, train a hand-keypoints model:")
             print("  yolo pose train data=hand-keypoints.yaml model=yolo11n-pose.pt epochs=100 imgsz=640")
             try:
-                self.pose_model = YOLO(pose_model_path)
-                print("[HandGestureController] Pose model loaded")
+                try:
+                    self.pose_model = YOLO(pose_model_path)
+                    print(f"[HandGestureController] Pose model loaded: {pose_model_path}")
+                except Exception as e1:
+                    # Fallback: if NCNN failed, try PyTorch
+                    if pose_model_path.endswith('_ncnn_model'):
+                        fallback_path = pose_model_path.replace('_ncnn_model', '.pt')
+                        print(f"[HandGestureController] NCNN model not found, trying PyTorch: {fallback_path}")
+                        self.pose_model = YOLO(fallback_path)
+                        print(f"[HandGestureController] PyTorch model loaded: {fallback_path}")
+                    else:
+                        raise e1
             except Exception as e:
                 print(f"[HandGestureController] WARNING: Failed to load pose model: {e}")
                 self.pose_model = YOLO('yolo11n-pose.pt')  # Auto-download

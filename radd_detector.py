@@ -55,7 +55,18 @@ class RADDDetector:
             try:
                 if model_path:
                     self.logger.info(f"Loading clothing detection model: {model_path}")
-                    self.model = YOLO(model_path)
+                    try:
+                        self.model = YOLO(model_path)
+                        self.logger.info(f"Clothing detection model loaded: {model_path}")
+                    except Exception as e1:
+                        # Fallback: if NCNN failed, try PyTorch
+                        if model_path.endswith('_ncnn_model'):
+                            fallback_path = model_path.replace('_ncnn_model', '.pt')
+                            self.logger.info(f"NCNN model not found, trying PyTorch: {fallback_path}")
+                            self.model = YOLO(fallback_path)
+                            self.logger.info(f"PyTorch model loaded: {fallback_path}")
+                        else:
+                            raise e1
                     self.use_heuristics = False
                     self.logger.info("Clothing detection model loaded successfully")
                 else:

@@ -57,7 +57,7 @@ class YOLOOBBDetector:
         self.confidence = confidence
         self.frame_center_x = width // 2
         
-        # Initialize YOLO OBB model
+        # Initialize YOLO OBB model (NCNN or PyTorch)
         logger.info(f"Loading YOLO OBB model: {model_path}...")
         try:
             # For OBB models, specify task='obb' during initialization
@@ -66,15 +66,26 @@ class YOLOOBBDetector:
             logger.info(f"Model task: {self.model.task}")
             logger.info(f"Model classes: {len(self.model.names)} classes")
         except Exception as e:
-            logger.error(f"Failed to load {model_path}: {e}, trying default...")
-            # Try to download if not found
-            try:
-                self.model = YOLO('yolo11n-obb.pt', task='obb')  # Will auto-download
-                logger.info("Default OBB model loaded")
-                logger.info(f"Model task: {self.model.task}")
-            except Exception as e2:
-                logger.error(f"Failed to load default OBB model: {e2}")
-                raise RuntimeError(f"Could not load OBB model: {e2}")
+            logger.warning(f"Failed to load {model_path}: {e}")
+            # Fallback: if NCNN failed, try PyTorch
+            if model_path.endswith('_ncnn_model'):
+                fallback_path = model_path.replace('_ncnn_model', '.pt')
+                logger.info(f"Trying PyTorch fallback: {fallback_path}...")
+                try:
+                    self.model = YOLO(fallback_path, task='obb')
+                    logger.info(f"PyTorch model loaded: {fallback_path}")
+                except Exception as e2:
+                    logger.error(f"Fallback failed: {e2}, trying default...")
+                    self.model = YOLO('yolo11n-obb.pt', task='obb')  # Will auto-download
+                    logger.info("Default OBB model loaded")
+            else:
+                # Try default
+                try:
+                    self.model = YOLO('yolo11n-obb.pt', task='obb')  # Will auto-download
+                    logger.info("Default OBB model loaded")
+                except Exception as e2:
+                    logger.error(f"Failed to load default OBB model: {e2}")
+                    raise RuntimeError(f"Could not load OBB model: {e2}")
         
         # Initialize camera
         logger.info("Initializing camera...")

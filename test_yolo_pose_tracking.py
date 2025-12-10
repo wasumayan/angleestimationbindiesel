@@ -55,16 +55,28 @@ class YOLOPoseTracker:
         self.debug_mode = config.DEBUG_MODE
         self._frame_counter = 0; 
         
-        # Initialize YOLO pose model
+        # Initialize YOLO pose model (NCNN or PyTorch)
         print(f"[YOLOPoseTracker] Loading YOLO pose model: {model_path}...")
         try:
             self.model = YOLO(model_path)
             print(f"[YOLOPoseTracker] Model loaded: {model_path}")
         except Exception as e:
-            print(f"[YOLOPoseTracker] WARNING: Failed to load {model_path}, trying default...")
-            # Try to download if not found
-            self.model = YOLO('yolo11n-pose.pt')  # Will auto-download
-            print("[YOLOPoseTracker] Default model loaded")
+            print(f"[YOLOPoseTracker] WARNING: Failed to load {model_path}: {e}")
+            # Try fallback: if NCNN failed, try PyTorch (or vice versa)
+            if config.USE_NCNN and model_path.endswith('_ncnn_model'):
+                fallback_path = model_path.replace('_ncnn_model', '.pt')
+                print(f"[YOLOPoseTracker] Trying PyTorch fallback: {fallback_path}...")
+                try:
+                    self.model = YOLO(fallback_path)
+                    print(f"[YOLOPoseTracker] PyTorch model loaded: {fallback_path}")
+                except Exception as e2:
+                    print(f"[YOLOPoseTracker] Fallback failed, trying default...")
+                    self.model = YOLO('yolo11n-pose.pt')  # Will auto-download
+                    print("[YOLOPoseTracker] Default model loaded")
+            else:
+                # Try default
+                self.model = YOLO('yolo11n-pose.pt')  # Will auto-download
+                print("[YOLOPoseTracker] Default model loaded")
         
         # Initialize camera
         print("[YOLOPoseTracker] Initializing camera...")

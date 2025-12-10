@@ -66,10 +66,20 @@ class ReturnToHomeTest:
         self.tof = ToFSensor()
         print("[TEST] TOF sensor initialized")
         
-        # Initialize YOLO object detection model
+        # Initialize YOLO object detection model (NCNN or PyTorch)
         print("[TEST] Initializing YOLO object detection...")
-        self.yolo_model = YOLO(config.YOLO_MODEL)
-        print("[TEST] YOLO model loaded")
+        try:
+            self.yolo_model = YOLO(config.YOLO_MODEL)
+            print(f"[TEST] YOLO model loaded: {config.YOLO_MODEL}")
+        except Exception as e:
+            # Fallback: if NCNN failed, try PyTorch
+            if config.USE_NCNN and config.YOLO_MODEL.endswith('_ncnn_model'):
+                fallback_path = config.YOLO_MODEL.replace('_ncnn_model', '.pt')
+                print(f"[TEST] NCNN model not found, trying PyTorch: {fallback_path}")
+                self.yolo_model = YOLO(fallback_path)
+                print(f"[TEST] PyTorch model loaded: {fallback_path}")
+            else:
+                raise e
         
         # Initialize camera
         print("[TEST] Initializing camera...")
