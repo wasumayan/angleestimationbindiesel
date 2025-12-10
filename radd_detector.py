@@ -696,4 +696,3 @@ class RADDDetector:
         
         # Average confidence of visible keypoints
         return sum(confidences) / len(confidences)
-
