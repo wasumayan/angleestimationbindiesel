@@ -192,6 +192,9 @@ class YOLOPoseTracker:
             angle_from_vertical = np.arctan2(abs(upper_arm[0]), abs(upper_arm[1])) * 180 / np.pi
         
         # Calculate elbow angle (bend in arm)
+        # Note: When arm is raised straight to the side, elbow can be nearly straight (small angle)
+        # This is valid! We use elbow angle only to filter out impossible poses, not as strict requirement
+        elbow_angle = None
         if upper_arm_length > 0 and lower_arm_length > 0:
             upper_arm_norm = upper_arm / upper_arm_length
             lower_arm_norm = lower_arm / lower_arm_length
@@ -203,51 +206,78 @@ class YOLOPoseTracker:
         # Check if arm is extended horizontally (more horizontal than vertical)
         horizontal_ratio = abs(upper_arm[0]) / max(abs(upper_arm[1]), 1.0)  # Avoid division by zero
         
+        # Calculate total arm vector (shoulder to wrist) for better angle measurement
+        total_arm = wrist - shoulder
+        total_arm_length = np.linalg.norm(total_arm)
+        
+        # Recalculate angle from vertical using TOTAL arm (shoulder to wrist)
+        # This is more accurate for raised arms regardless of elbow bend
+        if total_arm_length > 0:
+            # Angle of total arm from vertical (0° = straight down, 90° = horizontal)
+            total_arm_angle = np.arctan2(abs(total_arm[0]), abs(total_arm[1])) * 180 / np.pi
+        else:
+            total_arm_angle = angle_from_vertical  # Fallback to upper arm angle
+        
         # Robust detection criteria for 60-90 degree arm raise:
         # 0° = arm straight down, 90° = T-pose (horizontal)
-        # 1. Arm angle from vertical is between configured range (60-90 degrees)
+        # 1. Total arm angle from vertical is between configured range (60-90 degrees) - PRIMARY CHECK
         # 2. Arm is extended horizontally (not just straight up)
-        # 3. Elbow is bent appropriately (not fully extended, not fully bent)
-        # 4. Arm is extended away from body (minimum horizontal extension)
-        # Note: Wrist above shoulder check removed - angle is sufficient
+        # 3. Arm is extended away from body (minimum horizontal extension)
+        # 4. Elbow angle is reasonable (not an impossible pose) - LENIENT CHECK
         
-        angle_ok = config.ARM_ANGLE_MIN <= angle_from_vertical <= config.ARM_ANGLE_MAX
+        # Use total arm angle (shoulder to wrist) as primary indicator
+        angle_ok = config.ARM_ANGLE_MIN <= total_arm_angle <= config.ARM_ANGLE_MAX
         horizontal_extended = horizontal_ratio > config.ARM_HORIZONTAL_RATIO
-        elbow_bent = config.ARM_ELBOW_ANGLE_MIN <= elbow_angle <= config.ARM_ELBOW_ANGLE_MAX
         arm_extended = abs(upper_arm[0]) > config.ARM_MIN_HORIZONTAL_EXTENSION
+        
+        # Elbow angle check: Only filter out impossible poses (very bent backwards, etc.)
+        # Allow small angles (straight arm) and normal bends (0-180° is all valid)
+        # Only reject if elbow is impossibly bent (would indicate bad detection)
+        elbow_reasonable = True  # Default: assume reasonable
+        if elbow_angle is not None:
+            # Reject only if elbow angle is impossibly small (< 5°) when arm is clearly raised
+            # This filters out detection errors where keypoints are misaligned
+            if elbow_angle < 5.0 and total_arm_angle > 45.0:
+                # Very small elbow angle with raised arm might indicate detection error
+                elbow_reasonable = False
+            # Also reject if elbow is bent backwards (angle > 170° when arm is raised)
+            # This would indicate the arm is bent the wrong way
+            if elbow_angle > 170.0 and total_arm_angle > 45.0:
+                elbow_reasonable = False
         
         # Debug output
         if debug:
             print(f"  [{arm_side.upper()} ARM] Diagnostics:")
-            print(f"    Angle from vertical: {angle_from_vertical:.1f}° (range: {config.ARM_ANGLE_MIN}-{config.ARM_ANGLE_MAX}, 0°=down, 90°=T-pose) {'✓' if angle_ok else '✗'}")
+            print(f"    Total arm angle (shoulder→wrist): {total_arm_angle:.1f}° (range: {config.ARM_ANGLE_MIN}-{config.ARM_ANGLE_MAX}, 0°=down, 90°=T-pose) {'✓' if angle_ok else '✗'}")
+            print(f"    Upper arm angle (shoulder→elbow): {angle_from_vertical:.1f}° (reference)")
             print(f"    Horizontal ratio: {horizontal_ratio:.2f} > {config.ARM_HORIZONTAL_RATIO} {'✓' if horizontal_extended else '✗'}")
-            print(f"    Elbow angle: {elbow_angle:.1f}° (range: {config.ARM_ELBOW_ANGLE_MIN}-{config.ARM_ELBOW_ANGLE_MAX}) {'✓' if elbow_bent else '✗'}")
+            print(f"    Elbow angle: {elbow_angle:.1f}° (reasonable: {'✓' if elbow_reasonable else '✗'})")
             print(f"    Horizontal extension: {abs(upper_arm[0]):.1f}px > {config.ARM_MIN_HORIZONTAL_EXTENSION} {'✓' if arm_extended else '✗'}")
         
-        # All conditions must be met for strict detection (4 conditions, wrist check removed)
-        strict_detection = (angle_ok and horizontal_extended and elbow_bent and arm_extended)
+        # Strict detection: angle, horizontal extension, and reasonable elbow
+        strict_detection = (angle_ok and horizontal_extended and arm_extended and elbow_reasonable)
         
-        # Also try a more lenient detection (just angle and basic extension)
-        lenient_detection = (angle_ok and arm_extended and elbow_bent)
+        # Lenient detection: just angle and basic extension (elbow can be any reasonable angle)
+        lenient_detection = (angle_ok and arm_extended and elbow_reasonable)
         
         if strict_detection:
             if debug:
-                print(f"  [{arm_side.upper()} ARM] ✓ DETECTED (strict)! Angle: {angle_from_vertical:.1f}°")
-            return angle_from_vertical
+                print(f"  [{arm_side.upper()} ARM] ✓ DETECTED (strict)! Total arm angle: {total_arm_angle:.1f}°")
+            return total_arm_angle
         elif lenient_detection:
             # More lenient: just check angle is in range and arm is extended
             if debug:
-                print(f"  [{arm_side.upper()} ARM] ✓ DETECTED (lenient)! Angle: {angle_from_vertical:.1f}°")
-            return angle_from_vertical
+                print(f"  [{arm_side.upper()} ARM] ✓ DETECTED (lenient)! Total arm angle: {total_arm_angle:.1f}°")
+            return total_arm_angle
         
         if debug:
             failed_conditions = []
             if not angle_ok:
-                failed_conditions.append(f"angle({angle_from_vertical:.1f}° not in {config.ARM_ANGLE_MIN}-{config.ARM_ANGLE_MAX}°)")
+                failed_conditions.append(f"angle({total_arm_angle:.1f}° not in {config.ARM_ANGLE_MIN}-{config.ARM_ANGLE_MAX}°)")
             if not horizontal_extended:
                 failed_conditions.append(f"horizontal_ratio({horizontal_ratio:.2f} <= {config.ARM_HORIZONTAL_RATIO})")
-            if not elbow_bent:
-                failed_conditions.append(f"elbow({elbow_angle:.1f}° not in {config.ARM_ELBOW_ANGLE_MIN}-{config.ARM_ELBOW_ANGLE_MAX}°)")
+            if not elbow_reasonable:
+                failed_conditions.append(f"elbow_unreasonable({elbow_angle:.1f}° indicates bad detection)")
             if not arm_extended:
                 failed_conditions.append(f"extension({abs(upper_arm[0]):.1f}px <= {config.ARM_MIN_HORIZONTAL_EXTENSION}px)")
             print(f"  [{arm_side.upper()} ARM] ✗ Not detected. Failed: {', '.join(failed_conditions)}")
