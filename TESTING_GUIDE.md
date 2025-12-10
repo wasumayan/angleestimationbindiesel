@@ -1,299 +1,372 @@
-# Testing Guide for Bin Diesel System
+# Complete Testing Guide
 
-This guide helps you test each component individually without connecting to the car hardware.
+This guide walks you through testing each component individually, then the full system.
+
+---
 
 ## Prerequisites
 
-1. Install all dependencies:
+**Make sure you're in the project directory and venv is activated:**
 ```bash
-pip3 install --break-system-packages -r requirements.txt
+cd ~/Desktop/bindiesel
+source venv/bin/activate
 ```
 
-2. Set up environment variables in `.env`:
+**Verify .env file exists:**
+```bash
+cat .env
+```
+
+Should show:
 ```
 PICOVOICE_ACCESS_KEY=your_key
 OPENAI_API_KEY=your_key
 ```
 
-## Testing Individual Components
+---
 
-### 1. Wake Word Detection
+## 1. Test Wake Word Detection
 
-**Test Script**: `test_wake_word.py`
+**Purpose**: Verify "bin diesel" wake word detection works
 
+**Command:**
 ```bash
-python3 test_wake_word.py
+python -c "from wake_word_detector import WakeWordDetector; import config; import os; from dotenv import load_dotenv; load_dotenv(); w = WakeWordDetector('bin-diesel_en_raspberry-pi_v3_0_0/bin-diesel_en_raspberry-pi_v3_0_0.ppn', os.getenv('PICOVOICE_ACCESS_KEY')); w.start_listening(); print('Listening for wake word: \"bin diesel\"... Press Ctrl+C to exit'); import time; [time.sleep(1) for _ in iter(int, 1) if not w.detect()]"
 ```
 
-**What it does**:
-- Listens for "bin diesel" wake word
-- Prints debug messages when detected
-- No hardware needed (just microphone)
-
-**Expected Output**:
+**OR use the test script:**
+```bash
+python test_voice_commands.py
 ```
-[WakeWord] Listening for 'bin diesel'...
-[WakeWord] WAKE WORD DETECTED: 'bin diesel'
-✓ Wake word detected!
-```
+*(This tests voice recognition, but wake word is part of it)*
 
-**Troubleshooting**:
-- If no audio input: Check microphone permissions
-- If not detecting: Speak clearly, check access key
+**Expected Behavior:**
+- System starts listening
+- Say "bin diesel" clearly
+- Should print "[Main] System activated!" or similar
+- Press Ctrl+C to exit
+
+**Troubleshooting:**
+- **No audio input**: Check microphone with `arecord -l`
+- **Permission denied**: `sudo usermod -a -G audio $USER` (then logout/login)
+- **No wake word detected**: Speak clearly, check microphone volume
 
 ---
 
-### 2. Visual Detection (Person + Arm Raising)
+## 2. Test Pose Detection & Tracking
 
-**Test Script**: `test_visual_detection.py`
+**Purpose**: Verify YOLO pose detection and person tracking works
 
+**Command:**
 ```bash
-python3 test_visual_detection.py
+python test_yolo_pose_tracking.py --fps
 ```
 
-**What it does**:
-- Shows camera feed with detection overlays
+**Expected Behavior:**
+- Camera feed opens (or shows in terminal if no display)
 - Detects person in frame
-- Detects arm raising gesture
-- Displays angle and position info
+- Shows bounding boxes, pose keypoints, tracking IDs
+- Displays FPS in terminal
+- Press `q` or Ctrl+C to exit
 
-**Expected Output**:
-- Window showing camera feed
-- Green boxes around detected persons
-- "ARM RAISED!" text when arm is raised
-- Terminal output with detection data
+**What to Look For:**
+- ✅ Person detected with bounding box
+- ✅ Pose keypoints visible (17 keypoints)
+- ✅ Tracking ID shown (same person = same ID)
+- ✅ Arm angle detection (60-90° raise)
+- ✅ FPS > 10 (should be 15-30 FPS on Pi 4/5)
 
-**Controls**:
-- Press 'q' to quit
-- Press 'd' to toggle debug mode
+**Troubleshooting:**
+- **Camera not found**: `libcamera-hello --list-cameras`
+- **Camera permission error**: `sudo raspi-config` → Interface Options → Camera → Enable
+- **Low FPS**: Normal on Pi, but should be > 10 FPS
+- **No person detected**: Make sure you're in frame, good lighting
 
-**Troubleshooting**:
-- If no camera: Check `libcamera-hello --list-cameras`
-- If slow: Lower resolution in config.py
-
----
-
-### 3. Motor Controller (Mock Mode)
-
-**Test Script**: `test_motor.py`
-
-```bash
-python3 test_motor.py
-```
-
-**What it does**:
-- Tests motor PWM signals (in mock mode if not on Pi)
-- Simulates speed changes
-- Shows what PWM values would be sent
-
-**Expected Output**:
-```
-[MotorController] Mock mode - GPIO 18 would be used
-[MotorController] Speed set to 30.0% (duty cycle: 30.0%)
-[MotorController] Speed set to 50.0% (duty cycle: 50.0%)
-[MotorController] Motor stopped
-```
-
-**On Real Hardware**:
-- Connect motor to GPIO 18
-- Watch motor speed change
-- Adjust PWM values in config.py if needed
+**Test Arm Raising:**
+- Raise one arm to the side at 60-90° angle
+- Should detect `arm_raised: True`
+- Should show arm angle in output
 
 ---
 
-### 4. Servo Controller (Mock Mode)
+## 3. Test Hand Gesture Detection
 
-**Test Script**: `test_servo.py`
+**Purpose**: Verify hand gesture recognition works
 
+**Command:**
 ```bash
-python3 test_servo.py
+python hand_gesture_controller.py
 ```
 
-**What it does**:
-- Tests servo PWM signals (in mock mode if not on Pi)
-- Sweeps left to right
-- Shows steering positions
+**Expected Behavior:**
+- Camera feed starts
+- Detects hand gestures
+- Prints detected commands when gesture held for 0.5 seconds
+- Press Ctrl+C to exit
 
-**Expected Output**:
-```
-[ServoController] Mock mode - GPIO 19 would be used
-[ServoController] Position: CENTER (duty cycle: 7.5%)
-[ServoController] Position: LEFT 50.0% (duty cycle: 6.25%)
-[ServoController] Position: RIGHT 50.0% (duty cycle: 8.75%)
-```
+**Gestures to Test:**
+- **STOP**: Raise hand(s) high above shoulder
+- **TURN_LEFT**: Extend left hand to left side
+- **TURN_RIGHT**: Extend right hand to right side
+- **FORWARD (COME)**: Extend hand forward (beckoning motion)
+- **TURN_AROUND**: Extend hand backward/up
 
-**On Real Hardware**:
-- Connect servo to GPIO 19
-- Watch servo move
-- Adjust duty cycle values in config.py if needed
+**What to Look For:**
+- ✅ Hand detected in frame
+- ✅ Gesture recognized after holding 0.5s
+- ✅ Command printed: `[TEST] Command detected: STOP`
+
+**Troubleshooting:**
+- **No hand detected**: Make sure hand is clearly visible
+- **Gestures not recognized**: Try more exaggerated gestures
+- **False positives**: Gesture hold time prevents accidental commands
+
+**Note**: If hand keypoints model not available, falls back to pose model (less accurate but works)
 
 ---
 
-### 5. TOF Sensor (Distance Measurement)
+## 4. Test Voice Recognition
 
-**Test Script**: `test_tof.py`
+**Purpose**: Verify voice command recognition works
 
+**Command:**
 ```bash
-python3 test_tof.py
+python test_voice_commands.py
 ```
 
-**What it does**:
-- Reads distance from VL53L0X sensor
-- Shows real-time distance readings
-- Indicates when stop/emergency thresholds are reached
+**Expected Behavior:**
+- Starts listening for voice commands
+- Say a command (e.g., "go forward", "turn left", "stop")
+- System interprets via OpenAI GPT
+- Prints recognized command
+- Press Ctrl+C to exit
 
-**Expected Output**:
-```
-[TOFSensor] VL53L0X initialized
-Distance: 45.2cm (452mm) [SAFE]
-Distance: 8.5cm (85mm) [STOP!]
-Distance: 6.8cm (68mm) [EMERGENCY STOP!]
+**Commands to Test:**
+- "go forward" or "move forward" → Should return `FORWARD`
+- "turn left" → Should return `LEFT`
+- "turn right" → Should return `RIGHT`
+- "stop" → Should return `STOP`
+- "turn around" → Should return `TURN_AROUND`
+- "manual mode" → Should return `MANUAL_MODE`
+- "automatic mode" → Should return `AUTOMATIC_MODE`
+
+**What to Look For:**
+- ✅ Microphone picks up audio
+- ✅ Speech transcribed correctly
+- ✅ OpenAI interprets command correctly
+- ✅ Returns correct command string
+
+**Troubleshooting:**
+- **No audio input**: Check microphone permissions
+- **OpenAI API error**: Check API key in .env file
+- **Internet required**: OpenAI needs internet connection
+- **Slow response**: Normal (1-3 seconds for API call)
+
+**Test .env Loading:**
+```bash
+python test_env_loading.py
 ```
 
-**Troubleshooting**:
-- If sensor not found: Check I2C connection
-- Run: `i2cdetect -y 1` to see I2C devices
-- Should see device at address 0x29
+Should show:
+- ✅ .env file loaded
+- ✅ OPENAI_API_KEY found
+- ✅ OpenAI client initialized
 
 ---
 
-### 6. Voice Recognition (Manual Mode)
+## 5. Test Individual Hardware Components
 
-**Test Script**: `test_voice_commands.py`
-
+### Test Motor
 ```bash
-python3 test_voice_commands.py
+python test_motor.py
 ```
 
-**What it does**:
-- Records audio from microphone
-- Sends to OpenAI Whisper API
-- Recognizes commands: FORWARD, LEFT, RIGHT, STOP, TURN AROUND
+**Expected**: Motor runs at different speeds, then stops
 
-**Expected Output**:
-```
-[VoiceRecognizer] Recording... (speak now)
-[VoiceRecognizer] Recording complete
-[VoiceRecognizer] Transcribed: 'forward'
-[VoiceRecognizer] Command recognized: FORWARD
-✓ Command: FORWARD
+### Test Servo
+```bash
+python test_servo.py
 ```
 
-**Troubleshooting**:
-- If no API key: Set OPENAI_API_KEY in .env
-- If transcription fails: Check internet connection
-- Speak clearly and wait for "Recording..." prompt
+**Expected**: Servo moves left, center, right
+
+### Test TOF Sensor
+```bash
+python test_tof.py
+```
+
+**Expected**: Distance readings printed, changes when object moves
 
 ---
 
-### 7. Full System Test (No Hardware)
+## 6. Test Full System
 
-**Test Script**: `test_full_system.py`
+**Purpose**: Test complete system integration
 
+**Command:**
 ```bash
-python3 test_full_system.py
+python main.py
 ```
 
-**What it does**:
-- Tests entire workflow without hardware
-- Simulates all states
-- Shows state transitions
-- Useful for debugging logic
+**Expected Behavior:**
 
-**Expected Output**:
-```
-[StateMachine] Transition: idle → active
-[StateMachine] Transition: active → tracking_user
-[StateMachine] Transition: tracking_user → following_user
-[StateMachine] Transition: following_user → stopped
-```
+1. **Initialization:**
+   - All components initialize
+   - "System Ready!" message
+   - "Waiting for wake word: 'bin diesel'"
+
+2. **Wake Word Activation:**
+   - Say "bin diesel"
+   - System activates → "System activated!"
+   - Transitions to ACTIVE state
+
+3. **Autonomous Mode:**
+   - Raise arm to side (60-90°)
+   - System detects → "Autonomous mode: User detected with raised arm"
+   - Transitions to TRACKING_USER
+   - Keep arm raised → Transitions to FOLLOWING_USER
+   - Car follows you, steering based on your position
+   - When you get close (TOF sensor) → Stops at STOPPED state
+   - After 10 seconds → Returns to start (RETURNING_TO_START)
+
+4. **Manual Mode:**
+   - In ACTIVE state, say "manual mode"
+   - Enters MANUAL_MODE
+   - Use voice commands or hand gestures
+   - Car responds to commands
+   - Say "automatic mode" to return
+
+**What to Look For:**
+- ✅ All components initialize without errors
+- ✅ Wake word detection works
+- ✅ Person detection and tracking works
+- ✅ Arm raising detection works
+- ✅ Car follows correctly
+- ✅ TOF sensor stops car at correct distance
+- ✅ Manual mode voice/gesture commands work
+- ✅ State transitions happen correctly
+
+**Troubleshooting:**
+- **Component fails to initialize**: Check error message, verify dependencies
+- **Wake word not detected**: Check microphone, speak clearly
+- **Person not detected**: Check camera, lighting, position in frame
+- **Car doesn't move**: Check GPIO permissions, motor connections
+- **State machine stuck**: Check debug output, verify state transitions
 
 ---
 
-## Debug Mode
+## 7. Test with Debug Mode
 
-Enable debug mode in any test script:
-
-```bash
-python3 test_visual_detection.py --debug
-```
-
-Or set in config.py:
+**Enable debug mode in config.py:**
 ```python
 DEBUG_MODE = True
+DEBUG_VISUAL = True
+DEBUG_MOTOR = True
+DEBUG_SERVO = True
+DEBUG_TOF = True
+DEBUG_VOICE = True
+DEBUG_STATE = True
 ```
 
-Debug mode provides:
-- Detailed logging
-- Frame-by-frame analysis
-- Performance metrics
-- State transition details
+**Then run:**
+```bash
+python main.py
+```
 
-## Testing Workflows
+**You'll see detailed output:**
+- State transitions
+- Visual detection results
+- Motor/servo commands
+- TOF sensor readings
+- Voice recognition results
 
-### Autonomous Mode Workflow Test
+---
 
-1. Start visual detection test
-2. Stand in front of camera
-3. Raise your arm
-4. Watch detection and angle calculation
-5. Verify car would move in correct direction
+## Testing Checklist
 
-### Manual Mode Workflow Test
+### Component Tests
+- [ ] Wake word detection works
+- [ ] Pose detection works (person detected)
+- [ ] Pose tracking works (same person = same ID)
+- [ ] Arm raising detection works (60-90°)
+- [ ] Hand gesture detection works
+- [ ] Voice recognition works
+- [ ] Motor controller works
+- [ ] Servo controller works
+- [ ] TOF sensor works
 
-1. Start voice recognition test
-2. Say "FORWARD"
-3. Verify command is recognized
-4. Test all commands: LEFT, RIGHT, STOP, TURN AROUND
+### Integration Tests
+- [ ] System initializes completely
+- [ ] Wake word activates system
+- [ ] Autonomous mode follows user
+- [ ] Manual mode responds to commands
+- [ ] State machine transitions correctly
+- [ ] Safety systems work (TOF emergency stop)
+- [ ] Path tracking records movement
+- [ ] Return navigation works
 
-### TOF Sensor Integration Test
+### System Tests
+- [ ] Full autonomous cycle works (wake → follow → stop → return)
+- [ ] Manual mode works (voice + gestures)
+- [ ] Mode switching works (autonomous ↔ manual)
+- [ ] Error handling works (component failures)
+- [ ] Graceful shutdown works (Ctrl+C)
 
-1. Start TOF sensor test
-2. Move hand toward sensor
-3. Verify stop at 8cm
-4. Verify emergency stop at 7cm
+---
 
-## Performance Testing
-
-### FPS Measurement
+## Quick Test Commands Summary
 
 ```bash
-python3 test_visual_detection.py --fps
+# Wake word
+python -c "from wake_word_detector import WakeWordDetector; ..."
+
+# Pose detection
+python test_yolo_pose_tracking.py --fps
+
+# Hand gestures
+python hand_gesture_controller.py
+
+# Voice recognition
+python test_voice_commands.py
+
+# Hardware
+python test_motor.py
+python test_servo.py
+python test_tof.py
+
+# Full system
+python main.py
 ```
 
-Shows frames per second for visual detection.
+---
 
-### Latency Measurement
+## Common Issues & Solutions
 
-```bash
-python3 test_voice_commands.py --latency
-```
+### Camera Issues
+- **Permission denied**: `sudo raspi-config` → Enable camera
+- **Camera busy**: Kill other processes: `killall pipewire wireplumber`
+- **No camera found**: Check connection, run `libcamera-hello --list-cameras`
 
-Shows time from speech to command recognition.
+### Audio Issues
+- **No microphone**: Check with `arecord -l`
+- **Permission denied**: `sudo usermod -a -G audio $USER` (logout/login)
+- **ALSA warnings**: Usually harmless, can ignore
 
-## Common Issues
+### GPIO Issues
+- **Permission denied**: `sudo usermod -a -G gpio $USER` (logout/login)
+- **Pin conflicts**: Check config.py for pin assignments
 
-### "Module not found"
-- Install dependencies: `pip3 install --break-system-packages -r requirements.txt`
-- Check Python version: `python3 --version` (should be 3.6+)
+### YOLO Issues
+- **Model download slow**: Normal, wait for first download
+- **Low FPS**: Normal on Pi, should be > 10 FPS
+- **No detections**: Check lighting, person position
 
-### "Camera not found"
-- Enable camera: `sudo raspi-config` → Interface Options → Camera
-- Check: `libcamera-hello --list-cameras`
+### API Issues
+- **OpenAI errors**: Check API key, internet connection
+- **Picovoice errors**: Check access key in .env
 
-### "GPIO permission denied"
-- Add user to gpio group: `sudo usermod -a -G gpio $USER`
-- Log out and back in
+---
 
-### "I2C not found"
-- Enable I2C: `sudo raspi-config` → Interface Options → I2C
-- Check: `i2cdetect -y 1`
+**Test each component individually first, then test the full system!**
 
-## Next Steps
-
-Once all tests pass:
-1. Connect hardware (motor, servo, TOF sensor)
-2. Run full system: `python3 main.py`
-3. Test with real car
-4. Adjust PWM values in config.py as needed
 

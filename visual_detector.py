@@ -150,8 +150,16 @@ class VisualDetector:
         width_extension = aspect_ratio > 0.7
         
         # Combine methods
-        left_raised = (left_edge_density > edge_threshold) or (width_extension and x1 < frame.shape[1] * 0.3)
-        right_raised = (right_edge_density > edge_threshold) or (width_extension and x2 > frame.shape[1] * 0.7)
+        left_raised_raw = (left_edge_density > edge_threshold) or (width_extension and x1 < frame.shape[1] * 0.3)
+        right_raised_raw = (right_edge_density > edge_threshold) or (width_extension and x2 > frame.shape[1] * 0.7)
+        
+        # Swap left/right if camera is rotated 180°
+        if config.CAMERA_SWAP_LEFT_RIGHT:
+            left_raised = right_raised_raw  # Swapped
+            right_raised = left_raised_raw  # Swapped
+        else:
+            left_raised = left_raised_raw
+            right_raised = right_raised_raw
         
         # Calculate confidence
         confidence = min(1.0, (left_edge_density + right_edge_density) / 0.3)
@@ -162,13 +170,35 @@ class VisualDetector:
     
     def get_frame(self):
         """
-        Get current camera frame
+        Get current camera frame with rotation and color correction
         
         Returns:
             Frame in BGR format (for OpenCV processing)
         """
         array = self.picam2.capture_array()  # Returns RGB
-        frame = cv2.cvtColor(array, cv2.COLOR_RGB2BGR)  # Convert to BGR
+        
+        # Apply camera rotation if configured
+        if config.CAMERA_ROTATION == 180:
+            array = cv2.rotate(array, cv2.ROTATE_180)
+        elif config.CAMERA_ROTATION == 90:
+            array = cv2.rotate(array, cv2.ROTATE_90_CLOCKWISE)
+        elif config.CAMERA_ROTATION == 270:
+            array = cv2.rotate(array, cv2.ROTATE_90_COUNTERCLOCKWISE)
+        
+        # Apply flips if configured
+        if config.CAMERA_FLIP_HORIZONTAL:
+            array = cv2.flip(array, 1)  # Horizontal flip
+        if config.CAMERA_FLIP_VERTICAL:
+            array = cv2.flip(array, 0)  # Vertical flip
+        
+        # Fix color channel swap (red/blue) - swap before converting to BGR
+        if config.CAMERA_SWAP_RB:
+            # Swap red and blue channels: RGB -> BGR -> RGB (swaps R and B)
+            array = cv2.cvtColor(array, cv2.COLOR_RGB2BGR)
+            array = cv2.cvtColor(array, cv2.COLOR_BGR2RGB)
+        
+        # Convert to BGR for OpenCV
+        frame = cv2.cvtColor(array, cv2.COLOR_RGB2BGR)
         return frame
     
     def calculate_angle(self, person_box):

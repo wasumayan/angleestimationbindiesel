@@ -109,12 +109,33 @@ class CombinedDetector:
     
     def get_frame(self):
         """
-        Get current camera frame
+        Get current camera frame with rotation and color correction
         
         Returns:
             Frame in RGB format (for MediaPipe) and BGR format (for OpenCV display)
         """
         array = self.picam2.capture_array()  # Returns RGB
+        
+        # Apply camera rotation if configured
+        if config.CAMERA_ROTATION == 180:
+            array = cv2.rotate(array, cv2.ROTATE_180)
+        elif config.CAMERA_ROTATION == 90:
+            array = cv2.rotate(array, cv2.ROTATE_90_CLOCKWISE)
+        elif config.CAMERA_ROTATION == 270:
+            array = cv2.rotate(array, cv2.ROTATE_90_COUNTERCLOCKWISE)
+        
+        # Apply flips if configured
+        if config.CAMERA_FLIP_HORIZONTAL:
+            array = cv2.flip(array, 1)  # Horizontal flip
+        if config.CAMERA_FLIP_VERTICAL:
+            array = cv2.flip(array, 0)  # Vertical flip
+        
+        # Fix color channel swap (red/blue)
+        if config.CAMERA_SWAP_RB:
+            # Swap red and blue channels: RGB -> BGR -> RGB (swaps R and B)
+            array = cv2.cvtColor(array, cv2.COLOR_RGB2BGR)
+            array = cv2.cvtColor(array, cv2.COLOR_BGR2RGB)
+        
         frame_rgb = array.copy()
         frame_bgr = cv2.cvtColor(array, cv2.COLOR_RGB2BGR)  # Convert to BGR for display
         return frame_rgb, frame_bgr
@@ -367,9 +388,14 @@ class CombinedDetector:
         if pose_results.pose_landmarks:
             results['pose_landmarks'] = pose_results.pose_landmarks
             
-            # Check arm angles
-            left_angle = self.calculate_arm_angle(pose_results.pose_landmarks, 'left')
-            right_angle = self.calculate_arm_angle(pose_results.pose_landmarks, 'right')
+            # Check arm angles - swap left/right if camera is rotated
+            if config.CAMERA_SWAP_LEFT_RIGHT:
+                # When camera rotated 180°, swap left/right detection
+                left_angle = self.calculate_arm_angle(pose_results.pose_landmarks, 'right')  # Swapped
+                right_angle = self.calculate_arm_angle(pose_results.pose_landmarks, 'left')  # Swapped
+            else:
+                left_angle = self.calculate_arm_angle(pose_results.pose_landmarks, 'left')
+                right_angle = self.calculate_arm_angle(pose_results.pose_landmarks, 'right')
             
             if left_angle is not None:
                 results['left_arm_raised'] = True

@@ -20,6 +20,7 @@ RETURN_MARGIN = 0.5     # buffer for return time
 
 # Motor Control Values (PWM duty cycle percentages
 PWM_FREQUENCY_MOTOR = 40  #Hz 
+PWM_FREQUENCY = 40  # Alias for motor frequency
 
 MOTOR_STOP = 100.0      # 0% duty cycle = stopped
 MOTOR_MAX = 92.7        # 100% duty cycle = maximum speed
@@ -34,10 +35,42 @@ SERVO_RIGHT_MAX = 89.318 # 10% = full right
 # Visual Detection Configuration
 CAMERA_WIDTH = 640
 CAMERA_HEIGHT = 480
-YOLO_MODEL = 'yolo11n.pt'  # YOLO nano model for speed
-YOLO_CONFIDENCE = 0.25
+CAMERA_ROTATION = 180  # Rotate camera 180 degrees (0, 90, 180, 270) - set to 180 if camera is upside down
+CAMERA_FLIP_HORIZONTAL = False  # Flip horizontally (mirror)
+CAMERA_FLIP_VERTICAL = False  # Flip vertically
+CAMERA_SWAP_RB = True  # Swap red and blue channels (fixes color swap issue)
+CAMERA_SWAP_LEFT_RIGHT = True  # Swap left/right arm detection (needed when camera is rotated 180°)
+YOLO_MODEL = 'yolo11n.pt'  # YOLO nano model for speed (object detection)
+YOLO_POSE_MODEL = 'yolo11n-pose.pt'  # YOLO pose model (for pose estimation + tracking)
+YOLO_OBB_MODEL = 'yolo11n-obb.pt'  # YOLO OBB model (oriented bounding boxes for trash detection)
+YOLO_CLOTHING_MODEL = None  # Path to trained clothing detection model (for RADD mode)
+                                  # See: https://github.com/kesimeg/YOLO-Clothing-Detection
+                                  # Set to model path after training/downloading
+                                  # Example: 'models/clothing/best.pt'
+RADD_VIOLATION_TIMEOUT = 2.0  # Seconds before removing violator from tracking if not seen
+YOLO_HAND_MODEL = 'models/hand_keypoints/weights/best.pt' #YOLO for hand keypoints for manual mode!
+HAND_MODEL_PATH = YOLO_HAND_MODEL  # Alias for compatibility
+HAND_GESTURE_HOLD_TIME = 0.5  # Seconds gesture must be held before executing
+YOLO_CONFIDENCE = 0.01  # Very low confidence to detect everything (confidence boundaries removed)
 PERSON_CENTER_THRESHOLD = 30  # Pixels from center to consider "centered"
 ANGLE_TO_STEERING_GAIN = 0.5  # How much to turn based on angle
+TRACKING_TIMEOUT = 30.0  # Seconds before returning to idle if no user detected
+
+# Arm Angle Detection Configuration
+ARM_ANGLE_MIN = 60.0  # Minimum angle from vertical (degrees) - 0° = straight down, 90° = T-pose (horizontal)
+ARM_ANGLE_MAX = 90.0  # Maximum angle from vertical (degrees) - 0° = straight down, 90° = T-pose (horizontal)
+ARM_KEYPOINT_CONFIDENCE = 0.01  # Minimum keypoint confidence (very low to accept all detections)
+ARM_MIN_HORIZONTAL_EXTENSION = 30  # Minimum horizontal extension in pixels
+ARM_HORIZONTAL_RATIO = 0.8  # Minimum horizontal/vertical ratio (0.8 = more horizontal)
+ARM_WRIST_ABOVE_SHOULDER_TOLERANCE = 30  # Pixels tolerance for wrist above shoulder
+ARM_ELBOW_ANGLE_MIN = 45.0  # Minimum elbow bend angle (degrees)
+ARM_ELBOW_ANGLE_MAX = 160.0  # Maximum elbow bend angle (degrees)
+
+# Motor Speed Configuration
+FOLLOW_SPEED = 0.6  # Speed when following user (0.0-1.0)
+MOTOR_SLOW = 0.3  # Slow speed for turning
+MOTOR_MEDIUM = 0.5  # Medium speed
+MOTOR_FAST = 0.8  # Fast speed
 
 # Wake Word Configuration
 WAKE_WORD_MODEL_PATH = 'bin-diesel_en_raspberry-pi_v3_0_0/bin-diesel_en_raspberry-pi_v3_0_0.ppn'
@@ -51,13 +84,31 @@ VOICE_COMMAND_TIMEOUT = 5.0  # Seconds to wait for voice command
 
 # Safety Configuration
 EMERGENCY_STOP_ENABLED = True  # Enable TOF emergency stop
+TOF_STOP_DISTANCE_MM = 300  # Stop when within 30cm
+TOF_EMERGENCY_DISTANCE_MM = 100  # Emergency stop when within 10cm
+
+# Performance Configuration
+ENABLE_FRAME_CACHING = True  # Cache frames to reduce redundant captures
+FRAME_CACHE_TTL = 0.05  # Frame cache time-to-live (seconds)
+VISUAL_UPDATE_INTERVAL = 0.1  # Visual detection update interval (seconds)
+ENABLE_PERFORMANCE_MONITORING = True  # Track FPS and performance metrics
+FRAME_SKIP_INTERVAL = 1  # Process every Nth frame (1 = all frames, 2 = every other, etc.)
 
 # Debug Configuration
 DEBUG_MODE = False  # Enable debug logging throughout system
 DEBUG_VISUAL = True  # Debug visual detection specifically
+<<<<<<< HEAD
 DEBUG_MOTOR = False  # Debug motor commands
 DEBUG_SERVO = False  # Debug servo commands
 DEBUG_TOF = False  # Debug TOF sensor readings
 DEBUG_VOICE = False  # Debug voice recognition
 DEBUG_STATE = False  # Debug state machine transitions
+=======
+DEBUG_MOTOR = True  # Debug motor commands
+DEBUG_SERVO = True  # Debug servo commands
+DEBUG_TOF = True  # Debug TOF sensor readings
+DEBUG_VOICE = True  # Debug voice recognition
+DEBUG_STATE = True  # Debug state machine transitions
+DEBUG_PERFORMANCE = False  # Debug performance metrics
+>>>>>>> 09d429c9953dce386ef72465175e8f080da302f1
 
