@@ -88,6 +88,16 @@ class BinDieselSystem:
             self.cleanup()
             sys.exit(1)
         
+        # Initialize YOLO object detection model for home marker detection
+        log_info(self.logger, "Initializing YOLO object detection for home marker...")
+        try:
+            from ultralytics import YOLO
+            self.home_marker_model = YOLO(config.YOLO_MODEL)  # Use object detection model
+            log_info(self.logger, "YOLO object detection model initialized for home marker")
+        except Exception as e:
+            log_warning(self.logger, f"Failed to initialize YOLO object detection: {e}", "Home marker detection will not work")
+            self.home_marker_model = None
+        
         # Initialize motor controller
         log_info(self.logger, "Initializing motor controller...")
         try:
@@ -291,27 +301,27 @@ class BinDieselSystem:
                         log_error(self.logger, e, "Error in voice recognition")
         else:
             # After 5 seconds: check visual detection for autonomous mode
-            current_time = time.time()
-            if current_time - self.last_visual_update > self.visual_update_interval:
+        current_time = time.time()
+        if current_time - self.last_visual_update > self.visual_update_interval:
                 try:
                     # Use cached result if available and fresh (< 100ms old)
                     if (self.cached_visual_result and 
                         (current_time - self.cached_visual_timestamp) < 0.1):
                         result = self.cached_visual_result
                     else:
-                        result = self.visual.update()
+            result = self.visual.update()
                         self.cached_visual_result = result
                         self.cached_visual_timestamp = current_time
                     
-                    self.last_visual_update = current_time
-                    
-                    if result['person_detected'] and result['arm_raised']:
-                        # User raised arm - enter autonomous mode
+            self.last_visual_update = current_time
+            
+            if result['person_detected'] and result['arm_raised']:
+                # User raised arm - enter autonomous mode
                         log_info(self.logger, f"Person detected with arm raised! Track ID: {result.get('track_id', 'N/A')}, "
                                              f"Angle: {result.get('angle', 'N/A'):.1f}°")
                         self.sm.transition_to(State.TRACKING_USER)
                         self.sm.set_start_position("origin")  # Store starting position
-                        self.path_tracker.start_tracking()  # Start tracking path
+                self.path_tracker.start_tracking()  # Start tracking path
                         return  # Exit early - autonomous mode activated
                     elif result['person_detected']:
                         # Person detected but no arm raised - log for debugging
@@ -334,7 +344,7 @@ class BinDieselSystem:
             (current_time - self.cached_visual_timestamp) < 0.1):
             result = self.cached_visual_result
         elif should_update:
-            result = self.visual.update()
+        result = self.visual.update()
             self.cached_visual_result = result
             self.cached_visual_timestamp = current_time
         else:
@@ -393,7 +403,7 @@ class BinDieselSystem:
             (current_time - self.cached_visual_timestamp) < 0.1):
             result = self.cached_visual_result
         elif should_update:
-            result = self.visual.update()
+        result = self.visual.update()
             self.cached_visual_result = result
             self.cached_visual_timestamp = current_time
         else:
@@ -420,47 +430,47 @@ class BinDieselSystem:
         # Check if user is too close (TOF sensor) - only if emergency stop is enabled
         if self.tof and config.EMERGENCY_STOP_ENABLED:
             if self.tof.detect():
-                print("[Main] User reached (TOF sensor), stopping")
-                self.motor.stop()
-                self.servo.center()
+            print("[Main] User reached (TOF sensor), stopping")
+            self.motor.stop()
+            self.servo.center()
                 self.sm.transition_to(State.STOPPED)
-                return
+            return
         
-        # Calculate steering based on angle
-        if result['angle'] is not None:
-            angle = result['angle']
-            
+            # Calculate steering based on angle
+            if result['angle'] is not None:
+                angle = result['angle']
+                
             conditional_log(self.logger, 'debug',
                           f"Person angle: {angle:.1f}°, centered: {result['is_centered']}",
                           self.debug_mode and config.DEBUG_VISUAL)
-            
-            # Convert angle to steering position
-            # Use configurable gain to adjust sensitivity
-            steering_position = (angle / 45.0) * config.ANGLE_TO_STEERING_GAIN
-            steering_position = max(-1.0, min(1.0, steering_position))
-            
+                
+                # Convert angle to steering position
+                # Use configurable gain to adjust sensitivity
+                steering_position = (angle / 45.0) * config.ANGLE_TO_STEERING_GAIN
+                steering_position = max(-1.0, min(1.0, steering_position))
+                
             conditional_log(self.logger, 'debug',
                           f"Setting servo angle: {angle:.1f}° (position: {steering_position:.2f})",
                           self.debug_mode and config.DEBUG_SERVO)
-            
-            self.servo.set_angle(angle)
-            
-            # Adjust speed based on how centered user is
-            if result['is_centered']:
-                # User is centered - move forward
-                speed = config.FOLLOW_SPEED
+                
+                self.servo.set_angle(angle)
+                
+                # Adjust speed based on how centered user is
+                if result['is_centered']:
+                    # User is centered - move forward
+                    speed = config.FOLLOW_SPEED
                 conditional_log(self.logger, 'debug',
                               f"User centered, moving forward at {speed*100:.0f}%",
                               self.debug_mode and config.DEBUG_MOTOR)
-                self.motor.forward(speed)
-            else:
-                # User not centered - slow down while turning
-                speed = config.FOLLOW_SPEED * 0.7
+                    self.motor.forward(speed)
+                else:
+                    # User not centered - slow down while turning
+                    speed = config.FOLLOW_SPEED * 0.7
                 conditional_log(self.logger, 'debug',
                               f"User not centered, moving forward at {speed*100:.0f}% while turning",
                               self.debug_mode and config.DEBUG_MOTOR)
-                self.motor.forward(speed)
-            
+                    self.motor.forward(speed)
+                
             # Track path segment (only if path tracking is active)
             if self.path_tracker.is_tracking:
                 segment_duration = time.time() - self.last_command_time if self.last_command_time > 0 else 0.1
@@ -468,11 +478,11 @@ class BinDieselSystem:
                 conditional_log(self.logger, 'debug',
                               f"Path segment added: speed={speed:.2f}, steering={steering_position:.2f}, duration={segment_duration:.2f}s",
                               self.debug_mode)
-            self.last_command_time = time.time()
-        else:
-            # No angle data - stop
-            self.motor.stop()
-            self.servo.center()
+                self.last_command_time = time.time()
+            else:
+                # No angle data - stop
+                self.motor.stop()
+                self.servo.center()
             # Still track this stop segment if tracking
             if self.path_tracker.is_tracking and self.last_command_time > 0:
                 segment_duration = time.time() - self.last_command_time
@@ -491,50 +501,244 @@ class BinDieselSystem:
             print("[Main] Trash collection complete, returning to start")
             self.sm.transition_to(State.RETURNING_TO_START)
     
-    def handle_returning_to_start_state(self):
-        """Handle RETURNING_TO_START state - navigating back using reverse path"""
-        # Get reverse path
-        reverse_path = self.path_tracker.get_reverse_path()
+    def _check_color_match(self, frame, bbox, target_color):
+        """
+        Check if object in bounding box matches target color
         
-        if len(reverse_path) == 0:
-            print("[Main] No path recorded, cannot return to start")
+        Args:
+            frame: RGB frame
+            bbox: Bounding box (x1, y1, x2, y2)
+            target_color: Color name ('red', 'blue', 'green', etc.)
+            
+        Returns:
+            float: Percentage of pixels matching color (0.0-1.0)
+        """
+        import cv2
+        import numpy as np
+        
+        x1, y1, x2, y2 = bbox
+        h, w = frame.shape[:2]
+        
+        # Ensure coordinates are within frame bounds
+        x1 = max(0, min(x1, w))
+        y1 = max(0, min(y1, h))
+        x2 = max(0, min(x2, w))
+        y2 = max(0, min(y2, h))
+        
+        if x2 <= x1 or y2 <= y1:
+            return 0.0
+        
+        # Extract object region
+        roi = frame[y1:y2, x1:x2]
+        if roi.size == 0:
+            return 0.0
+        
+        # Convert RGB to HSV for better color detection
+        hsv = cv2.cvtColor(roi, cv2.COLOR_RGB2HSV)
+        
+        # Define color ranges in HSV
+        color_ranges = {
+            'red': [
+                (np.array([0, 50, 50]), np.array([10, 255, 255])),
+                (np.array([170, 50, 50]), np.array([180, 255, 255]))
+            ],
+            'blue': [
+                (np.array([100, 50, 50]), np.array([130, 255, 255]))
+            ],
+            'green': [
+                (np.array([40, 50, 50]), np.array([80, 255, 255]))
+            ],
+            'yellow': [
+                (np.array([20, 50, 50]), np.array([30, 255, 255]))
+            ],
+            'orange': [
+                (np.array([10, 50, 50]), np.array([20, 255, 255]))
+            ],
+            'purple': [
+                (np.array([130, 50, 50]), np.array([160, 255, 255]))
+            ],
+            'pink': [
+                (np.array([160, 50, 50]), np.array([170, 255, 255]))
+            ]
+        }
+        
+        target_color_lower = target_color.lower()
+        if target_color_lower not in color_ranges:
+            # Unknown color - return 0 (no match)
+            return 0.0
+        
+        # Create mask for target color
+        mask = np.zeros(hsv.shape[:2], dtype=np.uint8)
+        for lower, upper in color_ranges[target_color_lower]:
+            mask += cv2.inRange(hsv, lower, upper)
+        
+        # Calculate percentage of pixels matching color
+        total_pixels = mask.size
+        matching_pixels = np.count_nonzero(mask)
+        color_match_ratio = matching_pixels / total_pixels if total_pixels > 0 else 0.0
+        
+        return color_match_ratio
+    
+    def _detect_home_marker(self, frame):
+        """
+        Detect home marker using YOLO object detection + color tracking
+        Combines object class detection with color matching for robust detection
+        
+        Args:
+            frame: RGB frame from camera
+            
+        Returns:
+            dict with marker info: {'detected': bool, 'center_x': int, 'center_y': int, 'width': int, 'area': int, 'confidence': float, 'color_match': float}
+        """
+        if self.home_marker_model is None:
+            return {'detected': False, 'center_x': None, 'center_y': None, 'width': None, 'area': None, 'confidence': None, 'color_match': None}
+        
+        try:
+            # Run YOLO object detection
+            results = self.home_marker_model(
+                frame,
+                conf=config.HOME_MARKER_CONFIDENCE,
+                verbose=False,
+                imgsz=config.YOLO_INFERENCE_SIZE,
+                max_det=config.YOLO_MAX_DET
+            )
+            
+            if not results or len(results) == 0:
+                return {'detected': False, 'center_x': None, 'center_y': None, 'width': None, 'area': None, 'confidence': None, 'color_match': None}
+            
+            result = results[0]
+            
+            # Check if we have any detections
+            if result.boxes is None or len(result.boxes) == 0:
+                return {'detected': False, 'center_x': None, 'center_y': None, 'width': None, 'area': None, 'confidence': None, 'color_match': None}
+            
+            # Look for the specified object class (e.g., 'box') that also matches the target color
+            target_class = config.HOME_MARKER_OBJECT_CLASS.lower()
+            target_color = config.HOME_MARKER_COLOR.lower()
+            best_detection = None
+            best_score = 0.0  # Combined score: confidence * color_match
+            
+            for box in result.boxes:
+                class_id = int(box.cls[0])
+                confidence = float(box.conf[0])
+                class_name = self.home_marker_model.names[class_id].lower()
+                
+                # Check if this is the target class
+                if target_class in class_name or class_name in target_class:
+                    # Get bounding box coordinates
+                    x1, y1, x2, y2 = map(int, box.xyxy[0].cpu().numpy())
+                    
+                    # Check color match
+                    color_match_ratio = self._check_color_match(frame, (x1, y1, x2, y2), target_color)
+                    
+                    # Object must match color threshold
+                    if color_match_ratio >= config.HOME_MARKER_COLOR_THRESHOLD:
+                        # Combined score: confidence weighted by color match
+                        combined_score = confidence * color_match_ratio
+                        
+                        if combined_score > best_score:
+                            best_score = combined_score
+                            width = x2 - x1
+                            height = y2 - y1
+                            center_x = (x1 + x2) // 2
+                            center_y = (y1 + y2) // 2
+                            area = width * height
+                            
+                            best_detection = {
+                                'detected': True,
+                                'center_x': center_x,
+                                'center_y': center_y,
+                                'width': width,
+                                'height': height,
+                                'area': area,
+                                'confidence': confidence,
+                                'color_match': color_match_ratio,
+                                'class_name': class_name
+                            }
+            
+            if best_detection:
+                return best_detection
+            else:
+                return {'detected': False, 'center_x': None, 'center_y': None, 'width': None, 'area': None, 'confidence': None, 'color_match': None}
+                
+        except Exception as e:
+            log_error(self.logger, e, "Error in home marker detection")
+            return {'detected': False, 'center_x': None, 'center_y': None, 'width': None, 'area': None, 'confidence': None, 'color_match': None}
+    
+    def handle_returning_to_start_state(self):
+        """Handle RETURNING_TO_START state - simplified: turn 180°, find red square, drive to it"""
+        # Step 1: Turn 180 degrees (only once when entering this state)
+        if not hasattr(self, 'return_turn_complete'):
+            log_info(self.logger, "Returning to home: Turning 180 degrees...")
+            self.motor.stop()  # Stop before turning
+            # Turn left max (or right max - you can change this)
+            self.servo.turn_left(1.0)  # Max left turn
+            time.sleep(config.TURN_180_DURATION)  # Turn for specified duration
+            self.servo.center()  # Center steering
+            self.return_turn_complete = True
+            log_info(self.logger, f"Turn complete, scanning for home marker (object: {config.HOME_MARKER_OBJECT_CLASS})...")
+            return  # Exit early to allow turn to complete
+        
+        # Step 2: Scan for home marker using YOLO object detection
+        try:
+            frame = self.visual.get_frame()
+            marker = self._detect_home_marker(frame)
+            
+            if marker['detected']:
+                # Found home marker!
+                center_x = marker['center_x']
+                frame_center_x = config.CAMERA_WIDTH // 2
+                offset = center_x - frame_center_x
+                marker_width = marker['width']
+                
+                color_match = marker.get('color_match', 0.0)
+                class_name = marker.get('class_name', 'unknown')
+                confidence = marker.get('confidence', 0.0)
+                conditional_log(self.logger, 'info',
+                              f"Home marker detected! Class: {class_name}, Confidence: {confidence:.2f}, Color match: {color_match:.1%}, Center: {center_x}, Width: {marker_width}px",
+                              self.debug_mode)
+                
+                # Check if close enough to stop
+                if marker_width >= config.HOME_MARKER_STOP_DISTANCE:
+                    # Close enough - stop!
+                    log_info(self.logger, "Reached home marker! Stopping.")
             self.motor.stop()
             self.servo.center()
+                    # Clean up return state
+                    if hasattr(self, 'return_turn_complete'):
+                        delattr(self, 'return_turn_complete')
             self.path_tracker.stop_tracking()
-            self.sm.transition_to(State.IDLE)
+                    self.sm.transition_to(State.IDLE)
             return
         
-        # Execute reverse path segments
-        # For simplicity, we'll execute them sequentially
-        # In a more sophisticated system, you'd track which segment you're on
-        
-        # Get the first segment (last movement in original path)
-        if not hasattr(self, 'return_path_index'):
-            self.return_path_index = 0
-            self.return_segment_start_time = time.time()
-        
-        if self.return_path_index < len(reverse_path):
-            segment = reverse_path[self.return_path_index]
-            
-            # Execute current segment
-            self.motor.forward(segment['motor_speed'])
-            self.servo.set_position(segment['servo_position'])
-            
-            # Check if segment duration elapsed
-            if time.time() - self.return_segment_start_time >= segment['duration']:
-                self.return_path_index += 1
-                self.return_segment_start_time = time.time()
+                # Drive towards marker
+                # Calculate steering angle based on marker position
+                angle = (offset / config.CAMERA_WIDTH) * 90.0  # Convert to angle
+                angle = max(-45.0, min(45.0, angle))  # Clamp to servo range
                 
-                if self.debug_mode:
-                    print(f"[Main] DEBUG: Completed return segment {self.return_path_index}/{len(reverse_path)}")
-        else:
-            # All segments completed
-            print("[Main] Returned to start position")
+                # Set steering towards marker
+                self.servo.set_angle(angle)
+                
+                # Move forward at slow speed
+                self.motor.forward(config.MOTOR_SLOW)
+                
+                conditional_log(self.logger, 'debug',
+                              f"Driving towards home marker: angle={angle:.1f}°, width={marker_width}px",
+                              self.debug_mode)
+            else:
+                # Marker not found - search by turning slowly
+                log_info(self.logger, "Home marker not found, searching...")
+                # Turn slowly while searching
+                self.servo.turn_left(0.3)  # Small left turn
+                self.motor.forward(config.MOTOR_SLOW * 0.5)  # Very slow forward
+                
+        except Exception as e:
+            log_error(self.logger, e, "Error in return to home detection")
+            # On error, just stop
             self.motor.stop()
             self.servo.center()
-            self.path_tracker.stop_tracking()
-            self.path_tracker.clear()
-            delattr(self, 'return_path_index')
+            if hasattr(self, 'return_turn_complete'):
+                delattr(self, 'return_turn_complete')
             self.sm.transition_to(State.IDLE)
     
     def handle_manual_mode_state(self):
@@ -839,7 +1043,7 @@ class BinDieselSystem:
             log_error(self.logger, e, "Fatal error in main loop")
             import traceback
             if config.DEBUG_MODE:
-                traceback.print_exc()
+            traceback.print_exc()
         finally:
             self.cleanup()
     
@@ -849,23 +1053,23 @@ class BinDieselSystem:
         
         # Stop all movement
         try:
-            if hasattr(self, 'motor'):
-                self.motor.stop()
-            if hasattr(self, 'servo'):
-                self.servo.center()
+        if hasattr(self, 'motor'):
+            self.motor.stop()
+        if hasattr(self, 'servo'):
+            self.servo.center()
         except Exception as e:
             log_error(self.logger, e, "Error stopping motors during cleanup")
         
         # Stop all components (with individual error handling to prevent one failure from stopping cleanup)
         if hasattr(self, 'wake_word'):
             try:
-                self.wake_word.stop()
+            self.wake_word.stop()
             except Exception as e:
                 log_warning(self.logger, f"Error stopping wake word detector: {e}", "Cleanup")
         
         if hasattr(self, 'visual'):
             try:
-                self.visual.stop()
+            self.visual.stop()
             except Exception as e:
                 log_warning(self.logger, f"Error stopping visual detector: {e}", "Cleanup")
         
@@ -879,19 +1083,19 @@ class BinDieselSystem:
         
         if hasattr(self, 'motor'):
             try:
-                self.motor.cleanup()
+            self.motor.cleanup()
             except Exception as e:
                 log_warning(self.logger, f"Error cleaning up motor: {e}", "Cleanup")
         
         if hasattr(self, 'servo'):
             try:
-                self.servo.cleanup()
+            self.servo.cleanup()
             except Exception as e:
                 log_warning(self.logger, f"Error cleaning up servo: {e}", "Cleanup")
         
         if hasattr(self, 'voice') and self.voice:
             try:
-                self.voice.cleanup()
+            self.voice.cleanup()
             except Exception as e:
                 log_warning(self.logger, f"Error cleaning up voice recognizer: {e}", "Cleanup")
         

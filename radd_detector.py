@@ -709,3 +709,129 @@ class RADDDetector:
         
         # Average confidence of visible keypoints
         return sum(confidences) / len(confidences)
+
+
+def main():
+    """Test RADD detector with camera feed"""
+    import argparse
+    import time
+    from picamera2 import Picamera2
+    
+    parser = argparse.ArgumentParser(description='Test RADD detector')
+    parser.add_argument('--model', type=str, default=None, 
+                       help='Path to clothing detection model (default: from config)')
+    parser.add_argument('--conf', type=float, default=0.25, 
+                       help='Confidence threshold (default: 0.25)')
+    parser.add_argument('--fps', action='store_true', 
+                       help='Show FPS counter')
+    args = parser.parse_args()
+    
+    print("=" * 70)
+    print("RADD Detector Test")
+    print("=" * 70)
+    print("Detects users not wearing full pants or closed-toe shoes")
+    print("Controls:")
+    print("  - Press 'q' to quit")
+    print("=" * 70)
+    print()
+    
+    try:
+        # Initialize RADD detector
+        print("[TEST] Initializing RADD detector...")
+        detector = RADDDetector(
+            model_path=args.model,
+            confidence=args.conf
+        )
+        print("[TEST] RADD detector initialized")
+        
+        # Initialize camera
+        print("[TEST] Initializing camera...")
+        picam2 = Picamera2()
+        preview_config = picam2.create_preview_configuration(
+            main={"size": (config.CAMERA_WIDTH, config.CAMERA_HEIGHT), "format": "RGB888"},
+            controls={"FrameRate": config.CAMERA_FPS}
+        )
+        picam2.configure(preview_config)
+        picam2.start()
+        time.sleep(1.5)  # Wait for camera to initialize
+        print(f"[TEST] Camera started: {config.CAMERA_WIDTH}x{config.CAMERA_HEIGHT}")
+        print()
+        
+        # Start OpenCV window
+        cv2.startWindowThread()
+        
+        frame_count = 0
+        start_time = time.time()
+        
+        while True:
+            # Get frame
+            frame = picam2.capture_array(wait=True)
+            
+            # Apply camera rotation if configured
+            if config.CAMERA_ROTATION == 180:
+                frame = cv2.rotate(frame, cv2.ROTATE_180)
+            elif config.CAMERA_ROTATION == 90:
+                frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
+            elif config.CAMERA_ROTATION == 270:
+                frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
+            
+            # Apply flips if configured
+            if config.CAMERA_FLIP_HORIZONTAL:
+                frame = cv2.flip(frame, 1)
+            if config.CAMERA_FLIP_VERTICAL:
+                frame = cv2.flip(frame, 0)
+            
+            # Fix color channel swap if needed
+            if config.CAMERA_SWAP_RB:
+                frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            
+            # Detect violations
+            violations = detector.detect_violations(frame)
+            
+            # Draw overlay
+            annotated_frame = detector.draw_overlay(frame, violations.get('tracked_violators', {}))
+            
+            # Convert to BGR for display
+            frame_bgr = cv2.cvtColor(annotated_frame, cv2.COLOR_RGB2BGR)
+            
+            # Add FPS counter if requested
+            if args.fps:
+                frame_count += 1
+                elapsed = time.time() - start_time
+                if elapsed > 0:
+                    fps = frame_count / elapsed
+                    cv2.putText(frame_bgr, f'FPS: {fps:.1f}', (10, 30),
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+            
+            # Display frame
+            cv2.imshow('RADD Detector - Press q to quit', frame_bgr)
+            
+            # Handle keyboard input
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord('q') or key == 27:  # 'q' or ESC
+                break
+            
+            # Print violations to terminal periodically
+            if violations.get('violations_detected'):
+                for track_id, violation_data in violations.get('tracked_violators', {}).items():
+                    if violation_data.get('violation_detected'):
+                        print(f"[TEST] Violation detected! Track ID: {track_id}")
+                        print(f"  - No full pants: {violation_data.get('no_full_pants', False)}")
+                        print(f"  - No closed-toe shoes: {violation_data.get('no_closed_toe_shoes', False)}")
+    
+    except KeyboardInterrupt:
+        print("\n[TEST] Interrupted by user")
+    except Exception as e:
+        print(f"\n[TEST] ERROR: {e}")
+        import traceback
+        traceback.print_exc()
+    finally:
+        if 'picam2' in locals():
+            picam2.stop()
+        cv2.destroyAllWindows()
+        print("[TEST] Test complete")
+
+
+if __name__ == '__main__':
+    main()
