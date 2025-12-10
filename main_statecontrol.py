@@ -131,6 +131,9 @@ class BinDieselSystem:
         # Register signal handlers for graceful shutdown
         signal.signal(signal.SIGINT, self.signal_handler)
         signal.signal(signal.SIGTERM, self.signal_handler)
+
+        self.current_manual_command = None  # Current active manual command
+        self.last_command_time = 0  # Time of last command execution
         
         log_info(self.logger, "=" * 70)
         log_info(self.logger, "System Ready!")
