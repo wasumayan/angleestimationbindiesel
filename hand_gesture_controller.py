@@ -253,15 +253,22 @@ class HandGestureController:
         Returns:
             Gesture name or None
         """
-        # Get keypoints
-        left_wrist = keypoints[9]
-        right_wrist = keypoints[10]
-        left_shoulder = keypoints[5]
-        right_shoulder = keypoints[6]
+        # Get keypoints - swap left/right if camera is rotated
+        if config.CAMERA_SWAP_LEFT_RIGHT:
+            # When camera rotated 180°, swap left/right detection
+            left_wrist = keypoints[10]  # Swapped: use right_wrist for left detection
+            right_wrist = keypoints[9]  # Swapped: use left_wrist for right detection
+            left_shoulder = keypoints[6]  # Swapped
+            right_shoulder = keypoints[5]  # Swapped
+        else:
+            left_wrist = keypoints[9]
+            right_wrist = keypoints[10]
+            left_shoulder = keypoints[5]
+            right_shoulder = keypoints[6]
         
         gestures = []
         
-        # Check left arm gestures
+        # Check left arm gestures (from user's perspective)
         if left_wrist[2] > 0.5 and left_shoulder[2] > 0.5:
             wrist_y = left_wrist[1] - left_shoulder[1]
             wrist_x = left_wrist[0] - left_shoulder[0]
@@ -273,7 +280,7 @@ class HandGestureController:
             elif abs(wrist_x) < 30 and wrist_y < -20:
                 gestures.append('come')
         
-        # Check right arm gestures
+        # Check right arm gestures (from user's perspective)
         if right_wrist[2] > 0.5 and right_shoulder[2] > 0.5:
             wrist_y = right_wrist[1] - right_shoulder[1]
             wrist_x = right_wrist[0] - right_shoulder[0]

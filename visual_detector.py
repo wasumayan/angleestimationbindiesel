@@ -150,8 +150,16 @@ class VisualDetector:
         width_extension = aspect_ratio > 0.7
         
         # Combine methods
-        left_raised = (left_edge_density > edge_threshold) or (width_extension and x1 < frame.shape[1] * 0.3)
-        right_raised = (right_edge_density > edge_threshold) or (width_extension and x2 > frame.shape[1] * 0.7)
+        left_raised_raw = (left_edge_density > edge_threshold) or (width_extension and x1 < frame.shape[1] * 0.3)
+        right_raised_raw = (right_edge_density > edge_threshold) or (width_extension and x2 > frame.shape[1] * 0.7)
+        
+        # Swap left/right if camera is rotated 180°
+        if config.CAMERA_SWAP_LEFT_RIGHT:
+            left_raised = right_raised_raw  # Swapped
+            right_raised = left_raised_raw  # Swapped
+        else:
+            left_raised = left_raised_raw
+            right_raised = right_raised_raw
         
         # Calculate confidence
         confidence = min(1.0, (left_edge_density + right_edge_density) / 0.3)

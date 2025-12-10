@@ -388,9 +388,14 @@ class CombinedDetector:
         if pose_results.pose_landmarks:
             results['pose_landmarks'] = pose_results.pose_landmarks
             
-            # Check arm angles
-            left_angle = self.calculate_arm_angle(pose_results.pose_landmarks, 'left')
-            right_angle = self.calculate_arm_angle(pose_results.pose_landmarks, 'right')
+            # Check arm angles - swap left/right if camera is rotated
+            if config.CAMERA_SWAP_LEFT_RIGHT:
+                # When camera rotated 180°, swap left/right detection
+                left_angle = self.calculate_arm_angle(pose_results.pose_landmarks, 'right')  # Swapped
+                right_angle = self.calculate_arm_angle(pose_results.pose_landmarks, 'left')  # Swapped
+            else:
+                left_angle = self.calculate_arm_angle(pose_results.pose_landmarks, 'left')
+                right_angle = self.calculate_arm_angle(pose_results.pose_landmarks, 'right')
             
             if left_angle is not None:
                 results['left_arm_raised'] = True
