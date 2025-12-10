@@ -21,7 +21,7 @@ from wake_word_detector import WakeWordDetector
 from test_yolo_pose_tracking import YOLOPoseTracker
 from motor_controller import MotorController
 from servo_controller import ServoController
-from tof_sensor import TOFSensor
+from tof_sensor import ToFSensor
 from voice_recognizer import VoiceRecognizer
 from path_tracker import PathTracker
 from hand_gesture_controller import HandGestureController, get_gesture_command
@@ -118,10 +118,7 @@ class BinDieselSystem:
         # Initialize TOF sensor
         log_info(self.logger, "Initializing TOF sensor...")
         try:
-            self.tof = TOFSensor(
-                stop_distance_mm=config.TOF_STOP_DISTANCE_MM,
-                emergency_distance_mm=config.TOF_EMERGENCY_DISTANCE_MM
-            )
+            self.tof = ToFSensor()
             log_info(self.logger, "TOF sensor initialized successfully")
         except Exception as e:
             log_warning(self.logger, f"Failed to initialize TOF sensor: {e}", "Continuing without TOF sensor (safety feature disabled)")
@@ -301,15 +298,9 @@ class BinDieselSystem:
     def handle_following_user_state(self):
         """Handle FOLLOWING_USER state - moving toward user"""
         # Check TOF sensor for emergency stop
-        if self.tof and config.EMERGENCY_STOP_ENABLED:
-            distance = self.tof.read_distance()
-            if self.debug_mode and config.DEBUG_TOF:
-                print(f"[Main] DEBUG: TOF distance: {distance/10:.1f}cm" if distance else "[Main] DEBUG: TOF read error")
-            
-            if self.tof.is_emergency_stop():
+        if self.tof:       
+            if self.tof.detect():
                 print("[Main] EMERGENCY STOP: Object too close!")
-                if self.debug_mode:
-                    print(f"[Main] DEBUG: Emergency stop triggered at {distance/10:.1f}cm")
                 self.motor.stop()
                 self.servo.center()
                 return
@@ -336,7 +327,7 @@ class BinDieselSystem:
             return
         
         # Check if user is too close (TOF sensor)
-        if self.tof and self.tof.is_too_close():
+        if self.tof and self.tof.detect():
             print("[Main] User reached (TOF sensor), stopping")
             self.motor.stop()
             self.servo.center()
@@ -386,6 +377,8 @@ class BinDieselSystem:
             # No angle data - stop
             self.motor.stop()
             self.servo.center()
+            self.state_machine.transition_to(State.IDLE)
+            print("[Main] No angle data - returning to IDLE")
     
     def handle_stopped_state(self):
         """Handle STOPPED state - at target distance, waiting"""
