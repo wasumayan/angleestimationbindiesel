@@ -45,7 +45,7 @@ class BinDieselSystem:
         log_info(self.logger, "=" * 70)
         
         # Initialize state machine
-        self.state_machine = StateMachine(
+        self.sm = StateMachine(
             tracking_timeout=config.TRACKING_TIMEOUT
         )
         
@@ -235,7 +235,7 @@ class BinDieselSystem:
     def handle_idle_state(self):
         """Handle IDLE state - waiting for wake word"""
         if self.wake_word.detect():
-            self.state_machine.transition_to(State.ACTIVE)
+            self.sm.transition_to(State.ACTIVE)
             print("[Main] System activated!")
             if self.debug_mode:
                 print("[Main] DEBUG: Wake word detected, transitioning to ACTIVE")
@@ -259,13 +259,13 @@ class BinDieselSystem:
                         # Initialize gesture controller when entering manual mode
                         if not self._gesture_controller_initialized:
                             self._ensure_gesture_controller_initialized()
-                        self.state_machine.transition_to(State.MANUAL_MODE)
+                        self.sm.transition_to(State.MANUAL_MODE)
                         self.current_manual_command = None
                         return
-                    elif command_upper in ['RADD MODE', 'RADD', 'RAD MODE']:
+                    elif command_upper == 'RADD_MODE':
                         log_info(self.logger, "RADD mode activated via voice")
-                        self.state_machine.transition_to(State.RADD_MODE)
-                        self.state_machine.set_start_position("origin")
+                        self.sm.transition_to(State.RADD_MODE)
+                        self.sm.set_start_position("origin")
                         self.path_tracker.start_tracking()
                         return
             except Exception as e:
@@ -288,9 +288,16 @@ class BinDieselSystem:
                 
                 if result['person_detected'] and result['arm_raised']:
                     # User raised arm - enter autonomous mode
-                    self.state_machine.transition_to(State.TRACKING_USER)
-                    self.state_machine.set_start_position("origin")  # Store starting position
+                    log_info(self.logger, f"Person detected with arm raised! Track ID: {result.get('track_id', 'N/A')}, "
+                                         f"Angle: {result.get('angle', 'N/A'):.1f}°")
+                    self.sm.transition_to(State.TRACKING_USER)
+                    self.sm.set_start_position("origin")  # Store starting position
                     self.path_tracker.start_tracking()  # Start tracking path
+                elif result['person_detected']:
+                    # Person detected but no arm raised - log for debugging
+                    conditional_log(self.logger, 'debug', 
+                                  f"Person detected (no arm raised). Track ID: {result.get('track_id', 'N/A')}",
+                                  self.debug_mode)
                     self.last_command_time = time.time()  # Initialize command time for path tracking
                     conditional_log(self.logger, 'info', 
                                   "Autonomous mode: User detected with raised arm",
@@ -312,18 +319,20 @@ class BinDieselSystem:
         
         if not result['person_detected']:
             # User lost - check timeout
-            if self.state_machine.is_timeout():
+            if self.sm.is_timeout():
                 conditional_log(self.logger, 'info', 
                               "User tracking timeout, returning to idle",
                               config.DEBUG_MODE)
-                self.state_machine.transition_to(State.IDLE)
+                self.sm.transition_to(State.IDLE)
                 self.motor.stop()
                 self.servo.center()
             return
         
         if result['arm_raised']:
             # User has arm raised - start following
-            self.state_machine.transition_to(State.FOLLOWING_USER)
+            log_info(self.logger, f"Arm raised detected! Track ID: {result.get('track_id', 'N/A')}, "
+                                 f"Angle: {result.get('angle', 'N/A'):.1f}°")
+            self.sm.transition_to(State.FOLLOWING_USER)
             # Ensure path tracking is started and command time is initialized
             if not self.path_tracker.is_tracking:
                 self.path_tracker.start_tracking()
@@ -355,11 +364,11 @@ class BinDieselSystem:
         
         if not result['person_detected']:
             # User lost
-            if self.state_machine.is_timeout():
+            if self.sm.is_timeout():
                 conditional_log(self.logger, 'info',
                               "User lost, returning to idle",
                               config.DEBUG_MODE)
-                self.state_machine.transition_to(State.IDLE)
+                self.sm.transition_to(State.IDLE)
                 self.motor.stop()
                 self.servo.center()
             return
@@ -370,7 +379,7 @@ class BinDieselSystem:
                 print("[Main] User reached (TOF sensor), stopping")
                 self.motor.stop()
                 self.servo.center()
-                self.state_machine.transition_to(State.STOPPED)
+                self.sm.transition_to(State.STOPPED)
                 return
         
         # Calculate steering based on angle
@@ -424,7 +433,7 @@ class BinDieselSystem:
             if self.path_tracker.is_tracking and self.last_command_time > 0:
                 segment_duration = time.time() - self.last_command_time
                 self.path_tracker.add_segment(0.0, 0.0, segment_duration)  # Stop segment
-            self.state_machine.transition_to(State.IDLE)
+            self.sm.transition_to(State.IDLE)
             print("[Main] No angle data - returning to IDLE")
     
     def handle_stopped_state(self):
@@ -434,9 +443,9 @@ class BinDieselSystem:
         # In a real system, you might wait for a signal or button press
         
         wait_time = 10.0  # Wait 10 seconds for trash placement
-        if self.state_machine.get_time_in_state() > wait_time:
+        if self.sm.get_time_in_state() > wait_time:
             print("[Main] Trash collection complete, returning to start")
-            self.state_machine.transition_to(State.RETURNING_TO_START)
+            self.sm.transition_to(State.RETURNING_TO_START)
     
     def handle_returning_to_start_state(self):
         """Handle RETURNING_TO_START state - navigating back using reverse path"""
@@ -448,7 +457,7 @@ class BinDieselSystem:
             self.motor.stop()
             self.servo.center()
             self.path_tracker.stop_tracking()
-            self.state_machine.transition_to(State.IDLE)
+            self.sm.transition_to(State.IDLE)
             return
         
         # Execute reverse path segments
@@ -482,7 +491,7 @@ class BinDieselSystem:
             self.path_tracker.stop_tracking()
             self.path_tracker.clear()
             delattr(self, 'return_path_index')
-            self.state_machine.transition_to(State.IDLE)
+            self.sm.transition_to(State.IDLE)
     
     def handle_manual_mode_state(self):
         """Handle MANUAL_MODE state - waiting for voice commands and hand gestures"""
@@ -518,7 +527,7 @@ class BinDieselSystem:
                 self.current_manual_command = None
                 self.motor.stop()
                 self.servo.center()
-                self.state_machine.transition_to(State.ACTIVE)
+                self.sm.transition_to(State.ACTIVE)
             elif command == 'STOP':
                 # Stop current command
                 print(f"[Main] Stopping current command (from {'voice' if voice_command else 'gesture'})")
@@ -535,7 +544,7 @@ class BinDieselSystem:
         # If no voice or gesture controller available, return to idle
         if not self.voice and not self.gesture_controller:
             print("[Main] No input method available, returning to idle")
-            self.state_machine.transition_to(State.IDLE)
+            self.sm.transition_to(State.IDLE)
             return
         
         # Execute current command continuously until new command/stop
@@ -576,7 +585,7 @@ class BinDieselSystem:
         """Handle RADD_MODE state - drive towards users violating dress code"""
         if not self.radd_detector:
             log_warning(self.logger, "RADD detector not available, returning to idle")
-            self.state_machine.transition_to(State.IDLE)
+            self.sm.transition_to(State.IDLE)
             return
         
         # Get pose detection results (use cached frame if available)
@@ -611,13 +620,13 @@ class BinDieselSystem:
         
         if not active_violators:
             # No active violators - stop and wait
-            if self.state_machine.get_time_in_state() > 5.0:  # Wait 5 seconds
+            if self.sm.get_time_in_state() > 5.0:  # Wait 5 seconds
                 conditional_log(self.logger, 'info',
                               "No RADD violations detected, returning to idle",
                               config.DEBUG_MODE)
                 self.motor.stop()
                 self.servo.center()
-                self.state_machine.transition_to(State.IDLE)
+                self.sm.transition_to(State.IDLE)
             return
         
         # Select target violator (prioritize most recent or closest)
@@ -742,7 +751,7 @@ class BinDieselSystem:
                 self.performance_monitor.update()
                 self.frame_count += 1
                 
-                state = self.state_machine.get_state()
+                state = self.sm.get_state()
                 
                 # Route to appropriate handler based on state
                 if state == State.IDLE:

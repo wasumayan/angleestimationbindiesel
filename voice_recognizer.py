@@ -45,7 +45,10 @@ class VoiceRecognizer:
         'auto mode': 'AUTOMATIC_MODE',
         'auto': 'AUTOMATIC_MODE',
         'bin diesel': 'AUTOMATIC_MODE',  # Also accept wake word to return to auto
-        'manual mode': 'MANUAL_MODE'  # Enter manual mode
+        'manual mode': 'MANUAL_MODE',  # Enter manual mode
+        'radd mode': 'RADD_MODE',  # RADD mode
+        'radd': 'RADD_MODE',
+        'rad mode': 'RADD_MODE'
     }
     
     # System prompt for OpenAI GPT
@@ -58,9 +61,10 @@ Your job is to interpret spoken commands and return ONLY one of these exact comm
 - TURN_AROUND
 - AUTOMATIC_MODE
 - MANUAL_MODE
+- RADD_MODE
 
 Return ONLY the command name, nothing else. If the command doesn't match any of these, return "UNKNOWN".
-Be flexible with variations (e.g., "go forward", "move left", "turn right", "stop", "turn around", "automatic mode", "manual mode")."""
+Be flexible with variations (e.g., "go forward", "move left", "turn right", "stop", "turn around", "automatic mode", "manual mode", "radd mode", "radd")."""
     
     def __init__(self, api_key=None, model="gpt-4o-mini", energy_threshold=4000, 
                  pause_threshold=0.8, phrase_time_limit=3.0):
@@ -117,32 +121,30 @@ Be flexible with variations (e.g., "go forward", "move left", "turn right", "sto
                         continue
             
             if self.microphone is None:
-                raise RuntimeError("No working microphone found")
-            
-            # Adjust for ambient noise (with timeout to avoid hanging)
-            print("[VoiceRecognizer] Adjusting for ambient noise...")
-            try:
-                with self.microphone as source:
-                    self.recognizer.adjust_for_ambient_noise(source, duration=1)
-                print("[VoiceRecognizer] Ambient noise adjustment complete")
-            except (OSError, IOError) as e:
-                # ALSA/PortAudio errors (e.g., error 9988, ALSA errors)
-                error_str = str(e)
-                if '9988' in error_str or 'alsa' in error_str.lower() or 'pa_linux_alsa' in error_str.lower():
-                    raise RuntimeError(
-                        f"Audio device access failed (ALSA error): {e}\n"
-                        f"This usually means:\n"
-                        f"  1. Microphone permissions not granted\n"
-                        f"  2. Audio device is in use by another application\n"
-                        f"  3. No microphone available or not connected\n"
-                        f"  4. ALSA/PulseAudio configuration issues"
-                    ) from e
-                else:
+                print("[VoiceRecognizer] WARNING: No working microphone found. Voice commands may not work.")
+                print("[VoiceRecognizer] Continuing anyway - ALSA errors are often non-fatal.")
+                # Don't exit - continue and let it try to work despite errors
+            else:
+                # Adjust for ambient noise (with timeout to avoid hanging)
+                # Only do this if we have a microphone
+                print("[VoiceRecognizer] Adjusting for ambient noise...")
+                try:
+                    with self.microphone as source:
+                        self.recognizer.adjust_for_ambient_noise(source, duration=1)
+                    print("[VoiceRecognizer] Ambient noise adjustment complete")
+                except (OSError, IOError) as e:
+                    # ALSA/PortAudio errors (e.g., error 9988, ALSA errors)
+                    error_str = str(e)
+                    if '9988' in error_str or 'alsa' in error_str.lower() or 'pa_linux_alsa' in error_str.lower():
+                        print(f"[VoiceRecognizer] WARNING: ALSA error during ambient noise adjustment: {e}")
+                        print("[VoiceRecognizer] These errors are often non-fatal - continuing with default settings.")
+                        # Don't exit - ALSA errors are often just warnings and don't prevent functionality
+                    else:
+                        print(f"[VoiceRecognizer] Warning: Could not adjust for ambient noise: {e}")
+                        print("[VoiceRecognizer] Continuing with default settings...")
+                except Exception as e:
                     print(f"[VoiceRecognizer] Warning: Could not adjust for ambient noise: {e}")
                     print("[VoiceRecognizer] Continuing with default settings...")
-            except Exception as e:
-                print(f"[VoiceRecognizer] Warning: Could not adjust for ambient noise: {e}")
-                print("[VoiceRecognizer] Continuing with default settings...")
             
             # Set recognition parameters
             self.recognizer.energy_threshold = energy_threshold
@@ -154,18 +156,10 @@ Be flexible with variations (e.g., "go forward", "move left", "turn right", "sto
             print(f"[VoiceRecognizer] Pause threshold: {pause_threshold}s")
             
         except Exception as e:
-            error_msg = (
-                f"Failed to initialize microphone: {e}\n"
-                f"This usually means:\n"
-                f"  1. No microphone available or not connected\n"
-                f"  2. Microphone permissions not granted\n"
-                f"  3. Audio device is in use by another application\n"
-                f"  4. ALSA/PulseAudio configuration issues (Linux)\n"
-                f"\n"
-                f"Voice recognition will be disabled, but the system will continue to run.\n"
-                f"You can still use hand gestures or other input methods."
-            )
-            raise RuntimeError(error_msg) from e
+            print(f"[VoiceRecognizer] WARNING: Exception during initialization: {e}")
+            print("[VoiceRecognizer] Continuing anyway - ALSA errors are often non-fatal.")
+            # Don't raise - let it continue and try to work despite errors
+            # The microphone may still work even with ALSA warnings
     
     def interpret_command_with_gpt(self, transcribed_text):
         """
@@ -201,7 +195,7 @@ Be flexible with variations (e.g., "go forward", "move left", "turn right", "sto
             
             # Validate command
             valid_commands = ['FORWARD', 'LEFT', 'RIGHT', 'STOP', 'TURN_AROUND', 
-                            'AUTOMATIC_MODE', 'MANUAL_MODE']
+                            'AUTOMATIC_MODE', 'MANUAL_MODE', 'RADD_MODE']
             
             if command in valid_commands:
                 return command
@@ -231,7 +225,7 @@ Be flexible with variations (e.g., "go forward", "move left", "turn right", "sto
             timeout: Maximum seconds to wait for speech (None = wait indefinitely)
             
         Returns:
-            Command string (FORWARD, LEFT, RIGHT, STOP, TURN_AROUND, AUTOMATIC_MODE, MANUAL_MODE) or None
+            Command string (FORWARD, LEFT, RIGHT, STOP, TURN_AROUND, AUTOMATIC_MODE, MANUAL_MODE, RADD_MODE) or None
         """
         if self.microphone is None:
             return None
@@ -265,7 +259,7 @@ Be flexible with variations (e.g., "go forward", "move left", "turn right", "sto
                 return command
             else:
                 print(f"[VoiceRecognizer] No valid command found in: '{text}'")
-                print(f"[VoiceRecognizer] Valid commands: FORWARD, LEFT, RIGHT, STOP, TURN_AROUND, AUTOMATIC_MODE, MANUAL_MODE")
+                print(f"[VoiceRecognizer] Valid commands: FORWARD, LEFT, RIGHT, STOP, TURN_AROUND, AUTOMATIC_MODE, MANUAL_MODE, RADD_MODE")
                 return None
         
         except sr.WaitTimeoutError:

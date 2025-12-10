@@ -404,7 +404,15 @@ class YOLOPoseTracker:
                     results['objects'].append(detection)
                     
                     # Process person pose if available
-                    if class_name == 'person' and keypoints is not None:
+                    # Only process if: 1) it's actually a person, 2) has keypoints, 3) meets minimum confidence
+                    # Also validate that keypoints are reasonable (at least some keypoints have confidence > 0.1)
+                    if class_name == 'person' and keypoints is not None and confidence >= config.YOLO_PERSON_CONFIDENCE:
+                        # Validate keypoints: at least 5 keypoints should have reasonable confidence
+                        valid_keypoints = sum(1 for kpt in keypoints if kpt[2] > 0.1)  # Count keypoints with conf > 0.1
+                        if valid_keypoints < 5:
+                            # Skip this detection - keypoints are too unreliable
+                            continue
+                        
                         # Calculate arm angles (60-90 degrees raised to side)
                         # Swap left/right if camera is rotated (config.CAMERA_SWAP_LEFT_RIGHT)
                         # Enable debug if flag is set, or for first person detected
