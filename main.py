@@ -311,27 +311,27 @@ class BinDieselSystem:
                         log_error(self.logger, e, "Error in voice recognition")
         else:
             # After 5 seconds: check visual detection for autonomous mode
-        current_time = time.time()
-        if current_time - self.last_visual_update > self.visual_update_interval:
+            current_time = time.time()
+            if current_time - self.last_visual_update > self.visual_update_interval:
                 try:
                     # Use cached result if available and fresh (< 100ms old)
                     if (self.cached_visual_result and 
                         (current_time - self.cached_visual_timestamp) < 0.1):
                         result = self.cached_visual_result
                     else:
-            result = self.visual.update()
+                        result = self.visual.update()
                         self.cached_visual_result = result
                         self.cached_visual_timestamp = current_time
                     
-            self.last_visual_update = current_time
-            
-            if result['person_detected'] and result['arm_raised']:
-                # User raised arm - enter autonomous mode
+                    self.last_visual_update = current_time
+                    
+                    if result['person_detected'] and result['arm_raised']:
+                        # User raised arm - enter autonomous mode
                         log_info(self.logger, f"Person detected with arm raised! Track ID: {result.get('track_id', 'N/A')}, "
                                              f"Angle: {result.get('angle', 'N/A'):.1f}°")
                         self.sm.transition_to(State.TRACKING_USER)
                         self.sm.set_start_position("origin")  # Store starting position
-                self.path_tracker.start_tracking()  # Start tracking path
+                        self.path_tracker.start_tracking()  # Start tracking path
                         return  # Exit early - autonomous mode activated
                     elif result['person_detected']:
                         # Person detected but no arm raised - log for debugging
@@ -354,7 +354,7 @@ class BinDieselSystem:
             (current_time - self.cached_visual_timestamp) < 0.1):
             result = self.cached_visual_result
         elif should_update:
-        result = self.visual.update()
+            result = self.visual.update()
             self.cached_visual_result = result
             self.cached_visual_timestamp = current_time
         else:
@@ -413,7 +413,7 @@ class BinDieselSystem:
             (current_time - self.cached_visual_timestamp) < 0.1):
             result = self.cached_visual_result
         elif should_update:
-        result = self.visual.update()
+            result = self.visual.update()
             self.cached_visual_result = result
             self.cached_visual_timestamp = current_time
         else:
@@ -440,46 +440,46 @@ class BinDieselSystem:
         # Check if user is too close (TOF sensor) - only if emergency stop is enabled
         if self.tof and config.EMERGENCY_STOP_ENABLED:
             if self.tof.detect():
-            print("[Main] User reached (TOF sensor), stopping")
-            self.motor.stop()
-            self.servo.center()
+                print("[Main] User reached (TOF sensor), stopping")
+                self.motor.stop()
+                self.servo.center()
                 self.sm.transition_to(State.STOPPED)
-            return
+                return
         
-            # Calculate steering based on angle
-            if result['angle'] is not None:
-                angle = result['angle']
-                
+        # Calculate steering based on angle
+        if result['angle'] is not None:
+            angle = result['angle']
+            
             conditional_log(self.logger, 'debug',
                           f"Person angle: {angle:.1f}°, centered: {result['is_centered']}",
                           self.debug_mode and config.DEBUG_VISUAL)
-                
-                # Convert angle to steering position
-                # Use configurable gain to adjust sensitivity
-                steering_position = (angle / 45.0) * config.ANGLE_TO_STEERING_GAIN
-                steering_position = max(-1.0, min(1.0, steering_position))
-                
+            
+            # Convert angle to steering position
+            # Use configurable gain to adjust sensitivity
+            steering_position = (angle / 45.0) * config.ANGLE_TO_STEERING_GAIN
+            steering_position = max(-1.0, min(1.0, steering_position))
+            
             conditional_log(self.logger, 'debug',
                           f"Setting servo angle: {angle:.1f}° (position: {steering_position:.2f})",
                           self.debug_mode and config.DEBUG_SERVO)
-                
-                self.servo.set_angle(angle)
-                
-                # Adjust speed based on how centered user is
-                if result['is_centered']:
-                    # User is centered - move forward
-                    speed = config.FOLLOW_SPEED
+            
+            self.servo.set_angle(angle)
+            
+            # Adjust speed based on how centered user is
+            if result['is_centered']:
+                # User is centered - move forward
+                speed = config.FOLLOW_SPEED
                 conditional_log(self.logger, 'debug',
                               f"User centered, moving forward at {speed*100:.0f}%",
                               self.debug_mode and config.DEBUG_MOTOR)
-                    self.motor.forward(speed)
-                else:
-                    # User not centered - slow down while turning
-                    speed = config.FOLLOW_SPEED * 0.7
+                self.motor.forward(speed)
+            else:
+                # User not centered - slow down while turning
+                speed = config.FOLLOW_SPEED * 0.7
                 conditional_log(self.logger, 'debug',
                               f"User not centered, moving forward at {speed*100:.0f}% while turning",
                               self.debug_mode and config.DEBUG_MOTOR)
-                    self.motor.forward(speed)
+                self.motor.forward(speed)
                 
             # Track path segment (only if path tracking is active)
             if self.path_tracker.is_tracking:
@@ -712,15 +712,15 @@ class BinDieselSystem:
                 if marker_width >= config.HOME_MARKER_STOP_DISTANCE:
                     # Close enough - stop!
                     log_info(self.logger, "Reached home marker! Stopping.")
-            self.motor.stop()
-            self.servo.center()
+                    self.motor.stop()
+                    self.servo.center()
                     # Clean up return state
                     if hasattr(self, 'return_turn_complete'):
                         delattr(self, 'return_turn_complete')
-            self.path_tracker.stop_tracking()
+                    self.path_tracker.stop_tracking()
                     self.sm.transition_to(State.IDLE)
-            return
-        
+                    return
+                
                 # Drive towards marker
                 # Calculate steering angle based on marker position
                 angle = (offset / config.CAMERA_WIDTH) * 90.0  # Convert to angle
@@ -1053,7 +1053,7 @@ class BinDieselSystem:
             log_error(self.logger, e, "Fatal error in main loop")
             import traceback
             if config.DEBUG_MODE:
-            traceback.print_exc()
+                traceback.print_exc()
         finally:
             self.cleanup()
     
@@ -1063,23 +1063,23 @@ class BinDieselSystem:
         
         # Stop all movement
         try:
-        if hasattr(self, 'motor'):
-            self.motor.stop()
-        if hasattr(self, 'servo'):
-            self.servo.center()
+            if hasattr(self, 'motor'):
+                self.motor.stop()
+            if hasattr(self, 'servo'):
+                self.servo.center()
         except Exception as e:
             log_error(self.logger, e, "Error stopping motors during cleanup")
         
         # Stop all components (with individual error handling to prevent one failure from stopping cleanup)
         if hasattr(self, 'wake_word'):
             try:
-            self.wake_word.stop()
+                self.wake_word.stop()
             except Exception as e:
                 log_warning(self.logger, f"Error stopping wake word detector: {e}", "Cleanup")
         
         if hasattr(self, 'visual'):
             try:
-            self.visual.stop()
+                self.visual.stop()
             except Exception as e:
                 log_warning(self.logger, f"Error stopping visual detector: {e}", "Cleanup")
         
@@ -1093,19 +1093,19 @@ class BinDieselSystem:
         
         if hasattr(self, 'motor'):
             try:
-            self.motor.cleanup()
+                self.motor.cleanup()
             except Exception as e:
                 log_warning(self.logger, f"Error cleaning up motor: {e}", "Cleanup")
         
         if hasattr(self, 'servo'):
             try:
-            self.servo.cleanup()
+                self.servo.cleanup()
             except Exception as e:
                 log_warning(self.logger, f"Error cleaning up servo: {e}", "Cleanup")
         
         if hasattr(self, 'voice') and self.voice:
             try:
-            self.voice.cleanup()
+                self.voice.cleanup()
             except Exception as e:
                 log_warning(self.logger, f"Error cleaning up voice recognizer: {e}", "Cleanup")
         
