@@ -23,6 +23,7 @@ def main():
         # Initialize voice recognizer
         recognizer = VoiceRecognizer(
             api_key=config.OPENAI_API_KEY
+            model=config.OPENAI_MODEL
         )
         
         print("[TEST] Voice recognizer initialized")
