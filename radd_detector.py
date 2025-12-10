@@ -70,13 +70,30 @@ class RADDDetector:
         
         # Class mappings for clothing detection model
         # Based on: https://github.com/kesimeg/YOLO-Clothing-Detection
-        # Categories: Clothing, Shoes, Bags, Accessories
-        self.clothing_classes = {
-            'clothing': 0,  # Full clothing (pants, shirts, etc.)
-            'shoes': 1,     # Shoes
-            'bags': 2,      # Bags
-            'accessories': 3  # Accessories
-        }
+        # IMPORTANT: Class order from official repo is:
+        #   0: accessories
+        #   1: bags
+        #   2: clothing
+        #   3: shoes
+        # We'll use model.names to get actual class names (more reliable)
+        self.clothing_classes = None  # Will be set from model after loading
+        if self.model is not None:
+            # Get class names from model (more reliable than hardcoding)
+            model_names = self.model.names
+            self.clothing_classes = {}
+            for class_id, class_name in model_names.items():
+                class_name_lower = class_name.lower()
+                if 'accessor' in class_name_lower:
+                    self.clothing_classes['accessories'] = class_id
+                elif 'bag' in class_name_lower:
+                    self.clothing_classes['bags'] = class_id
+                elif 'cloth' in class_name_lower:
+                    self.clothing_classes['clothing'] = class_id
+                elif 'shoe' in class_name_lower or 'footwear' in class_name_lower:
+                    self.clothing_classes['shoes'] = class_id
+            
+            self.logger.info(f"Clothing model classes: {model_names}")
+            self.logger.info(f"Mapped classes: {self.clothing_classes}")
         
         # Person tracking and violation state
         # Track violations per person ID to maintain state across frames
@@ -328,11 +345,13 @@ class RADDDetector:
             person_roi = frame
         
         # Run clothing detection
+        # Use same settings as official training script for consistency
         try:
             results = self.model(
                 person_roi,
                 conf=self.confidence,
-                verbose=False
+                verbose=False,
+                imgsz=640  # Match training image size
             )
         except Exception as e:
             self.logger.error(f"Clothing detection error: {e}")
@@ -362,6 +381,7 @@ class RADDDetector:
         }
         
         # Process detections
+        # Use class indices from model for reliable detection
         if result.boxes is not None:
             boxes = result.boxes
             for i, box in enumerate(boxes):
@@ -369,27 +389,35 @@ class RADDDetector:
                 confidence = float(box.conf[0])
                 class_name = self.model.names[class_id].lower()
                 
-                # Map to our categories
-                if 'cloth' in class_name:
-                    detections['clothing'].append({
-                        'confidence': confidence,
-                        'box': box.xyxy[0].cpu().numpy()
-                    })
-                elif 'shoe' in class_name or 'footwear' in class_name:
-                    detections['shoes'].append({
-                        'confidence': confidence,
-                        'box': box.xyxy[0].cpu().numpy()
-                    })
-                elif 'bag' in class_name:
-                    detections['bags'].append({
-                        'confidence': confidence,
-                        'box': box.xyxy[0].cpu().numpy()
-                    })
-                elif 'accessor' in class_name:
-                    detections['accessories'].append({
-                        'confidence': confidence,
-                        'box': box.xyxy[0].cpu().numpy()
-                    })
+                # Use mapped class indices for reliable detection
+                # Fallback to string matching if mapping not available
+                detection_data = {
+                    'confidence': confidence,
+                    'box': box.xyxy[0].cpu().numpy(),
+                    'class_id': class_id,
+                    'class_name': class_name
+                }
+                
+                # Map using class indices (more reliable)
+                if self.clothing_classes:
+                    if class_id == self.clothing_classes.get('clothing'):
+                        detections['clothing'].append(detection_data)
+                    elif class_id == self.clothing_classes.get('shoes'):
+                        detections['shoes'].append(detection_data)
+                    elif class_id == self.clothing_classes.get('bags'):
+                        detections['bags'].append(detection_data)
+                    elif class_id == self.clothing_classes.get('accessories'):
+                        detections['accessories'].append(detection_data)
+                else:
+                    # Fallback: string matching (less reliable)
+                    if 'cloth' in class_name:
+                        detections['clothing'].append(detection_data)
+                    elif 'shoe' in class_name or 'footwear' in class_name:
+                        detections['shoes'].append(detection_data)
+                    elif 'bag' in class_name:
+                        detections['bags'].append(detection_data)
+                    elif 'accessor' in class_name:
+                        detections['accessories'].append(detection_data)
         
         # Determine violations
         # Strategy: Analyze clothing and shoe detections to identify violations
