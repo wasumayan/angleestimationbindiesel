@@ -348,7 +348,7 @@ class YOLOPoseTracker:
         
         # Run YOLO inference with tracking
         # Use track mode for object tracking (per YOLO docs: https://docs.ultralytics.com/modes/track/)
-        # Optimize: Use half precision if available, reduce image size for speed
+        # Optimize: Use max_det and agnostic_nms for speed (better than resizing)
         yolo_results = self.model.track(
             frame,
             conf=0.01,  # Very low confidence (0.01) to detect everything - removed confidence boundary
@@ -357,7 +357,9 @@ class YOLOPoseTracker:
             tracker='bytetrack.yaml',  # Fast tracker (or 'botsort.yaml' for better accuracy)
             show=False,  # Don't show results automatically
             half=False,  # Set to True if using GPU (faster but less accurate)
-            imgsz=640  # Use consistent image size for better caching
+            imgsz=config.YOLO_INFERENCE_SIZE,  # Match camera resolution (640) to avoid resize overhead
+            max_det=config.YOLO_MAX_DET,  # Limit detections for speed (biggest performance gain)
+            agnostic_nms=config.YOLO_AGNOSTIC_NMS  # Faster NMS processing
         )
         
         yolo_result = None

@@ -162,6 +162,7 @@ class BinDieselSystem:
         self.frame_count = 0
         self.cached_visual_result = None  # Cache visual detection results
         self.cached_visual_timestamp = 0
+        self.frame_skip_counter = 0  # Counter for frame skipping
         
         # Manual mode state
         self.current_manual_command = None  # Current active manual command
@@ -324,13 +325,27 @@ class BinDieselSystem:
         """Handle TRACKING_USER state - detecting and tracking user"""
         # Update visual detection (use cached if available)
         current_time = time.time()
+        
+        # Frame skipping: only process every Nth frame for better performance
+        self.frame_skip_counter += 1
+        should_update = (self.frame_skip_counter % config.FRAME_SKIP_INTERVAL == 0)
+        
         if (self.cached_visual_result and 
             (current_time - self.cached_visual_timestamp) < 0.1):
             result = self.cached_visual_result
-        else:
+        elif should_update:
             result = self.visual.update()
             self.cached_visual_result = result
             self.cached_visual_timestamp = current_time
+        else:
+            # Use cached result if skipping this frame
+            result = self.cached_visual_result if self.cached_visual_result else {
+                'person_detected': False,
+                'arm_raised': False,
+                'angle': None,
+                'is_centered': False,
+                'track_id': None
+            }
         
         if not result['person_detected']:
             # User lost - check timeout
@@ -369,13 +384,27 @@ class BinDieselSystem:
         
         # Update visual detection (use cached if available)
         current_time = time.time()
+        
+        # Frame skipping: only process every Nth frame for better performance
+        self.frame_skip_counter += 1
+        should_update = (self.frame_skip_counter % config.FRAME_SKIP_INTERVAL == 0)
+        
         if (self.cached_visual_result and 
             (current_time - self.cached_visual_timestamp) < 0.1):
             result = self.cached_visual_result
-        else:
+        elif should_update:
             result = self.visual.update()
             self.cached_visual_result = result
             self.cached_visual_timestamp = current_time
+        else:
+            # Use cached result if skipping this frame
+            result = self.cached_visual_result if self.cached_visual_result else {
+                'person_detected': False,
+                'arm_raised': False,
+                'angle': None,
+                'is_centered': False,
+                'track_id': None
+            }
         
         if not result['person_detected']:
             # User lost
