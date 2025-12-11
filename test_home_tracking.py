@@ -21,24 +21,20 @@ import sys
 import time
 import argparse
 import cv2
+import config
 import numpy as np
 from pathlib import Path
 from collections import deque
+from home_marker_detector import detect_red_box, check_color_match_red
+from logger import setup_logger, log_info, log_warning, log_error
+from servo_controller import ServoController
+from motor_controller import MotorController
+from ultralytics import YOLO
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-try:
-    import config
-    from home_marker_detector import detect_red_box, check_color_match_red
-    from logger import setup_logger, log_info, log_warning, log_error
-    from servo_controller import ServoController
-    from motor_controller import MotorController
-    from ultralytics import YOLO
-except ImportError as e:
-    print(f"ERROR: Missing required module: {e}")
-    print("Required: config, home_marker_detector, logger, servo_controller, motor_controller, ultralytics")
-    sys.exit(1)
+
 
 
 class CentroidTracker:
@@ -68,7 +64,7 @@ class CentroidTracker:
             frame,
             confidence_threshold=0.20,  # Lowered for lock mode reliability
             color_threshold=0.20,       # Lowered for lock mode reliability
-            square_aspect_ratio_tolerance=0.35  # More tolerant of shape variation
+            square_aspect_ratio_tolerance=0.45  # More tolerant of shape variation
         )
         
         if marker['detected']:
@@ -143,8 +139,7 @@ class HomeMarkerTracker:
             right_max_duty=config.SERVO_RIGHT_MAX
         ) if use_servo else None
         
-        if self.servo:
-            self.servo.center()
+        self.servo.center()
         
         # Motor
         self.motor = MotorController(
@@ -152,8 +147,7 @@ class HomeMarkerTracker:
             frequency=config.PWM_FREQUENCY
         ) if use_motor else None
         
-        if self.motor:
-            self.motor.stop()
+        self.motor.stop()
         
         # Tracking state
         self.is_scanning = True
@@ -161,7 +155,7 @@ class HomeMarkerTracker:
         self.tracker = None
         self.last_detection = None
         self.lost_count = 0
-        self.lost_threshold = 5
+        self.lost_threshold = 10
         
         CentroidTracker.yolo_model = self.yolo_model
         
@@ -175,9 +169,9 @@ class HomeMarkerTracker:
         # Detection parameters
         self.confidence_threshold = 0.25
         self.color_threshold = 0.25
-        self.square_tolerance = 0.35
+        self.square_tolerance = 0.45
         self.stop_distance = config.HOME_MARKER_STOP_DISTANCE
-        self.center_tolerance = config.CAMERA_WIDTH * 0.05
+        self.center_tolerance = config.CAMERA_WIDTH * 0.1
         
         # Servo/Motor parameters
         self.steering_gain = config.ANGLE_TO_STEERING_GAIN
@@ -277,10 +271,7 @@ class HomeMarkerTracker:
         # Compute steering angle (proportional to offset)
         steering_angle = (offset / frame_center_x) * 45.0  # Map to [-45, 45] degrees
         steering_angle = max(-45.0, min(45.0, steering_angle))
-        
-        # Set servo angle
-        if self.servo:
-            self.servo.set_angle(steering_angle)
+        self.servo.set_angle(steering_angle)
         
         # Determine speed based on centering and distance
         if abs(offset) < self.center_tolerance:
@@ -411,12 +402,6 @@ class HomeMarkerTracker:
                 # Draw UI
                 annotated = self.draw_ui(frame_bgr, detection, mode_str)
                 
-                # Update FPS
-                self.frame_count += 1
-                frame_time = time.time() - frame_start
-                if frame_time > 0:
-                    fps = 1.0 / frame_time
-                    self.fps_history.append(fps)
                 
                 # Display
                 cv2.imshow('Home Marker Tracker Test', annotated)
@@ -454,10 +439,6 @@ class HomeMarkerTracker:
                         self.motor.stop()
                     if self.servo:
                         self.servo.center()
-                elif key == ord('f'):
-                    self.show_fps = not self.show_fps
-                    log_info(self.logger, f"FPS display: {'ON' if self.show_fps else 'OFF'}")
-                
                 # Small delay to prevent CPU spinning
                 time.sleep(0.01)
         
