@@ -24,7 +24,6 @@ import cv2
 import config
 import numpy as np
 from pathlib import Path
-from collections import deque
 from home_marker_detector import detect_red_box, check_color_match_red
 from logger import setup_logger, log_info, log_warning, log_error
 from servo_controller import ServoController
@@ -160,8 +159,6 @@ class HomeMarkerTracker:
         CentroidTracker.yolo_model = self.yolo_model
         
         # Performance tracking
-        self.frame_count = 0
-        self.start_time = time.time()
         self.motor_enabled = True
         
         # Detection parameters
@@ -389,17 +386,13 @@ class HomeMarkerTracker:
         
         # Draw controls
         controls = [
-            "q: quit | s: scan | l: lock | m: motor | r: reset | f: fps"
+            "q: quit | s: scan | l: lock | m: motor | r: reset"
         ]
         y_control = h - 30
         cv2.rectangle(annotated, (5, y_control - 20), (700, y_control + 5), (0, 0, 0), -1)
         cv2.putText(annotated, controls[0], (10, y_control), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
         
-        # Draw FPS if enabled
-        if self.show_fps and len(self.fps_history) > 0:
-            avg_fps = np.mean(self.fps_history)
-            fps_text = f"FPS: {avg_fps:.1f}"
-            cv2.putText(annotated, fps_text, (config.CAMERA_WIDTH - 150, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+        # (FPS display removed)
         
         return annotated
     #####################################################################################################
@@ -440,9 +433,8 @@ class HomeMarkerTracker:
                 # Display
                 cv2.imshow('Home Marker Tracker Test', annotated)
                 
-                # Lightweight per-frame diagnostics (every 10 frames)
-                if self.frame_count % 10 == 0:
-                    log_info(self.logger, f"STATE: scanning={self.is_scanning} locked={self.is_locked} tracker={'yes' if self.tracker else 'no'} last_w={self.last_detection['width'] if self.last_detection else 'N/A'}")
+                # Lightweight per-second diagnostics
+                # (removed FPS/frame-count based logging)
                 
                 # Handle keyboard input
                 key = cv2.waitKey(1) & 0xFF
@@ -520,7 +512,7 @@ class HomeMarkerTracker:
         # Close windows
         cv2.destroyAllWindows()
         
-        log_info(self.logger, f"Test complete. Frames processed: {self.frame_count}")
+        log_info(self.logger, "Test complete.")
         log_info(self.logger, "Cleanup finished")
 
 
