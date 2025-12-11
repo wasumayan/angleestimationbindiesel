@@ -1,123 +1,79 @@
-# Hand Keypoints Model Training Guide
+# Model Training Guide
 
-## Training on MacBook
+This guide covers training custom YOLO models for the Bin Diesel system.
 
-You can train the hand-keypoints model on your MacBook (much faster than on Raspberry Pi) and then push it to the repo.
+## Overview
 
-### Step 1: Install Dependencies
+The system uses YOLO11 models for various tasks:
+- **Pose Estimation**: `yolo11n-pose.pt` (pre-trained, no training needed)
+- **Object Detection**: `yolo11n.pt` (pre-trained, no training needed)
+- **Custom Models**: Hand keypoints, clothing detection (if needed)
+
+## Training Custom Models
+
+### Hand Keypoints Model
+
+**Note:** Hand gesture control is currently commented out in the main system.
+
+If you need to train a hand keypoints model:
+
+1. **Prepare Dataset**: Use a hand keypoints dataset (e.g., from Ultralytics)
+2. **Train on MacBook** (recommended - much faster than Raspberry Pi):
 
 ```bash
-# Make sure you have ultralytics installed
+# Install dependencies
 pip install ultralytics
 
-# For GPU training (if you have Apple Silicon with Metal):
-# PyTorch should already support MPS (Metal Performance Shaders)
-# For Intel Macs, training will use CPU (slower but still works)
-```
-
-### Step 2: Train the Model
-
-```bash
-# Run the training script
+# Run training script (if exists)
 python train_hand_keypoints.py
 ```
-
-This will:
-- Auto-download the hand-keypoints dataset (369 MB, 26,768 images)
-- Train YOLO11n-pose for 100 epochs
-- Save the model to `models/hand_keypoints/weights/best.pt` (ready for git)
 
 **Training time estimates:**
 - MacBook with M1/M2/M3 (GPU): ~30-60 minutes
 - MacBook Intel (CPU): ~2-4 hours
 - Raspberry Pi (CPU): ~8-12 hours (not recommended)
 
-### Step 3: Update Config
+3. **Save Model**: Trained model should be saved to `models/hand_keypoints/weights/best.pt`
 
-After training, update `config.py`:
-
+4. **Update Config**: Update `config.py`:
 ```python
 YOLO_HAND_MODEL = 'models/hand_keypoints/weights/best.pt'
 ```
 
-### Step 4: Commit and Push
+### Converting Models to NCNN
+
+After training, convert models to NCNN format for better Raspberry Pi performance:
 
 ```bash
-# Add the trained model
-git add models/hand_keypoints/weights/best.pt
-git add config.py
-
-# Commit
-git commit -m "Add trained hand-keypoints model"
-
-# Push to repo
-git push origin main
+python3 convert_to_ncnn.py
 ```
 
-### Step 5: Pull on Raspberry Pi
+This will convert all `.pt` models to NCNN format automatically.
 
-On your Raspberry Pi:
+## Model File Sizes
 
-```bash
-cd ~/Desktop/bindiesel  # or wherever your repo is
-git pull origin main
-```
+- Pre-trained YOLO models: ~6-12 MB each
+- Custom trained models: ~5-10 MB typically
+- NCNN models: Similar size, better performance on ARM
 
-The model will be automatically used by the hand gesture controller!
+## Using Trained Models
 
-## Model File Size
+1. **Place model in repository**: `models/your_model/weights/best.pt`
+2. **Update config.py**: Set the model path
+3. **Convert to NCNN** (optional but recommended):
+   ```bash
+   python3 convert_to_ncnn.py
+   ```
+4. **Commit and push**: Models are small enough to commit directly to git
 
-The trained model (`best.pt`) is typically around **5-10 MB**, which is small enough to commit to git.
+## Training Tips
 
-## Alternative: Use Git LFS (for larger models)
+- **Use GPU when available**: Training on GPU is 10-20x faster
+- **Start with fewer epochs**: Test with 20-50 epochs first
+- **Use smaller models**: `yolo11n` is fastest, `yolo11s` is more accurate
+- **Monitor training**: Watch for overfitting (validation loss increasing)
 
-If the model file becomes too large, you can use Git LFS:
+## References
 
-```bash
-# Install git-lfs (if not already installed)
-git lfs install
-
-# Track .pt files with LFS
-git lfs track "*.pt"
-
-# Add and commit
-git add .gitattributes
-git add models/hand_keypoints/weights/best.pt
-git commit -m "Add trained hand-keypoints model (LFS)"
-git push origin main
-```
-
-## Training Options
-
-You can customize training by editing `train_hand_keypoints.py`:
-
-```python
-# For faster training (fewer epochs, less accuracy):
-epochs=50
-
-# For better accuracy (more epochs):
-epochs=200
-
-# For larger model (more accurate, slower):
-model = YOLO("yolo11s-pose.pt")  # or yolo11m-pose.pt, yolo11l-pose.pt
-
-# For CPU training:
-python train_hand_keypoints.py --cpu
-```
-
-## Verification
-
-After pulling on the Pi, verify the model works:
-
-```bash
-python hand_gesture_controller.py
-```
-
-You should see:
-```
-[HandGestureController] Loading hand keypoints model: models/hand_keypoints/weights/best.pt...
-[HandGestureController] Hand keypoints model loaded
-```
-
-If you see "Falling back to pose model", the model file wasn't found - check the path in `config.py`.
-
+- [Ultralytics Training Documentation](https://docs.ultralytics.com/modes/train/)
+- [YOLO11 Model Zoo](https://docs.ultralytics.com/models/)
