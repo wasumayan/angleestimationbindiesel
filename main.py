@@ -380,6 +380,8 @@ class BinDieselSystem:
     def handle_tracking_user_state(self):
         """Handle TRACKING_USER state - detecting and tracking user"""
         # Update visual detection (use cached if available)
+        
+       
         current_time = time.time()
         
         # Frame skipping: only process every Nth frame for better performance
@@ -417,7 +419,6 @@ class BinDieselSystem:
             conditional_log(self.logger, 'info', 
                           "User lost, stopping and searching...",
                           config.DEBUG_MODE)
-            self.motor.stop()
             self.servo.center()
     
     ################################################################################################################ handle_following_user_state
@@ -425,6 +426,10 @@ class BinDieselSystem:
     
     def handle_following_user_state(self):
         """Handle FOLLOWING_USER state - moving toward user"""
+
+        if not self.sm.old_state == self.sm.state:
+            self.motor.forward(config.MOTOR_FAST) 
+            self.sm.transition_to(State.TRACKING_USER)
         
         # Update visual detection (use cached if available)
         current_time = time.time()
