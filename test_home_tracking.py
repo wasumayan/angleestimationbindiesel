@@ -41,21 +41,64 @@ except ImportError as e:
     sys.exit(1)
 
 
-def create_tracker():
-    """Create MOSSE tracker, handling different OpenCV versions"""
-    try:
-        # Try newer OpenCV versions (cv2.legacy module)
-        return cv2.legacy.TrackerMOSSE_create()
-    except AttributeError:
-        try:
-            # Fall back to older OpenCV versions
-            return cv2.TrackerMOSSE_create()
-        except AttributeError:
-            # Fall back to CSRT if MOSSE not available
-            try:
-                return cv2.legacy.TrackerCSRT_create()
-            except AttributeError:
-                return cv2.TrackerCSRT_create()
+class CentroidTracker:
+    """Simple centroid-based tracker (works on all platforms without cv2.legacy)"""
+    yolo_model = None  # Set by parent class
+    
+    def __init__(self, max_distance=100, max_lost_frames=5):
+        self.last_bbox = None
+        self.max_distance = max_distance
+        self.max_lost_frames = max_lost_frames
+        self.lost_frames = 0
+    
+    def init(self, frame, bbox):
+        """Initialize tracker with initial bounding box"""
+        self.last_bbox = bbox
+        self.lost_frames = 0
+        return True
+    
+    def update(self, frame):
+        """Update tracker (re-run YOLO detection to find marker)"""
+        if not self.yolo_model:
+            return False, self.last_bbox
+        
+        # Re-detect marker in frame
+        marker = detect_red_box(
+            self.yolo_model,
+            frame,
+            confidence_threshold=0.30,
+            color_threshold=0.35,
+            square_aspect_ratio_tolerance=0.25
+        )
+        
+        if marker['detected']:
+            # Calculate new bbox from marker
+            x1 = marker['center_x'] - marker['width'] // 2
+            y1 = marker['center_y'] - marker['height'] // 2
+            new_bbox = (x1, y1, marker['width'], marker['height'])
+            
+            # Check distance from last known position
+            if self.last_bbox:
+                last_cx = self.last_bbox[0] + self.last_bbox[2] // 2
+                last_cy = self.last_bbox[1] + self.last_bbox[3] // 2
+                new_cx = marker['center_x']
+                new_cy = marker['center_y']
+                distance = np.sqrt((new_cx - last_cx)**2 + (new_cy - last_cy)**2)
+                
+                if distance > self.max_distance:
+                    self.lost_frames += 1
+                    if self.lost_frames >= self.max_lost_frames:
+                        return False, self.last_bbox
+                    return True, self.last_bbox
+            
+            self.last_bbox = new_bbox
+            self.lost_frames = 0
+            return True, new_bbox
+        else:
+            self.lost_frames += 1
+            if self.lost_frames >= self.max_lost_frames or not self.last_bbox:
+                return False, self.last_bbox
+            return True, self.last_bbox
 
 
 class HomeMarkerTracker:
@@ -157,6 +200,9 @@ class HomeMarkerTracker:
         self.lost_count = 0
         self.lost_threshold = 5
         
+        # Custom tracker needs reference to YOLO model for re-detection
+        CentroidTracker.yolo_model = self.yolo_model
+        
         # Performance tracking
         self.frame_count = 0
         self.start_time = time.time()
@@ -214,13 +260,13 @@ class HomeMarkerTracker:
         )
         
         if marker['detected']:
-            # Marker found! Initialize tracker and lock on
+            # Marker found! Initialize centroid tracker and lock on
             x1 = marker['center_x'] - marker['width'] // 2
             y1 = marker['center_y'] - marker['height'] // 2
             bbox = (x1, y1, marker['width'], marker['height'])
             
-            # Initialize MOSSE tracker (very fast) - handles different OpenCV versions
-            self.tracker = create_tracker()
+            # Initialize centroid tracker (works on all platforms)
+            self.tracker = CentroidTracker(max_distance=150, max_lost_frames=10)
             ok = self.tracker.init(frame_bgr, bbox)
             
             if ok:
@@ -250,48 +296,27 @@ class HomeMarkerTracker:
             self.is_scanning = True
             return None
         
-        # Track using MOSSE
+        # Track using centroid tracker (re-detects marker each frame)
         ok, bbox = self.tracker.update(frame_bgr)
         
         if not ok:
-            self.lost_count += 1
-            log_warning(self.logger, f"Tracker update failed (lost_count: {self.lost_count})", "Tracking")
-            if self.lost_count >= self.lost_threshold:
-                log_info(self.logger, "Lost lock, returning to scan mode")
-                self.is_locked = False
-                self.is_scanning = True
-                self.tracker = None
-                if self.motor:
-                    self.motor.stop()
-                if self.servo:
-                    self.servo.center()
-                return None
-            else:
-                return self.last_detection  # Use cached detection
+            log_info(self.logger, "Lost lock, returning to scan mode")
+            self.is_locked = False
+            self.is_scanning = True
+            self.tracker = None
+            if self.motor:
+                self.motor.stop()
+            if self.servo:
+                self.servo.center()
+            return None
         
-        # Tracker succeeded
+        # Tracker succeeded - bbox is (x, y, w, h)
         x, y, w, h = map(int, bbox)
         center_x = x + w // 2
         center_y = y + h // 2
         
-        # Verify color match (quick check to confirm still red)
+        # Verify color match (sanity check)
         color_match = check_color_match_red(frame_bgr, (x, y, x + w, y + h))
-        
-        if color_match < 0.2:
-            self.lost_count += 1
-            log_warning(self.logger, f"Color match failed: {color_match:.2f} (lost_count: {self.lost_count})", "Tracking")
-            if self.lost_count >= self.lost_threshold:
-                log_info(self.logger, "Lost color match, returning to scan mode")
-                self.is_locked = False
-                self.is_scanning = True
-                self.tracker = None
-                if self.motor:
-                    self.motor.stop()
-                if self.servo:
-                    self.servo.center()
-                return None
-        else:
-            self.lost_count = 0  # Reset lost count on successful track
         
         # Calculate steering offset
         frame_center_x = config.CAMERA_WIDTH // 2
