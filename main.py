@@ -44,6 +44,12 @@ class BinDieselSystem:
         log_info(self.logger, "=" * 70)
         log_info(self.logger, "Bin Diesel System Initializing...")
         log_info(self.logger, "=" * 70)
+
+        # Control flags 
+        self.last_visual_update = 0
+        self.visual_update_interval = config.VISUAL_UPDATE_INTERVAL  # Use configurable update interval
+        self.running = True
+        self._wake_word_stopped = False  # Track if wake word detector has been stopped
     
        
         # Initialize wake word detector
@@ -154,13 +160,6 @@ class BinDieselSystem:
         # self.gesture_controller = None
         # self._gesture_controller_initialized = False
         
-        # Control flags (running already set at start of __init__)
-        self.last_visual_update = 0
-        self.visual_update_interval = config.VISUAL_UPDATE_INTERVAL  # Use configurable update interval
-
-                # Initialize control flags early to prevent AttributeError
-        self.running = True
-        self._wake_word_stopped = False  # Track if wake word detector has been stopped
         
         # Performance optimizations
         self.frame_cache = FrameCache(max_age=0.05)  # Cache frames for 50ms
@@ -169,8 +168,6 @@ class BinDieselSystem:
         self.cached_visual_result = None  # Cache visual detection results
         self.cached_visual_timestamp = 0
         self.frame_skip_counter = 0  # Counter for frame skipping
-        
-        # Manual mode state - COMMENTED OUT
         # self.current_manual_command = None  # Current active manual command
         
         # Debug mode
@@ -209,7 +206,8 @@ class BinDieselSystem:
         self.sm.transition_to(new_state)
         
       
-    
+    ################################################################################################################## _ensure_voice_initialized
+    ##############################################################################################################################
     # def _ensure_voice_initialized(self):
     #     """Lazy initialization of voice recognizer to avoid audio conflicts - COMMENTED OUT"""
     #     if self._voice_initialized:
@@ -260,7 +258,8 @@ class BinDieselSystem:
     #         self.gesture_controller = None
     #         return False
 
-    
+    ########################################################################################################################## handle_idle_state
+    ##############################################################################################################################
     def handle_idle_state(self):
         """Handle IDLE state - wake word only, no voice recognizer (exclusive mic access)"""
         # Clean up voice recognizer - COMMENTED OUT (no voice commands)
@@ -274,14 +273,14 @@ class BinDieselSystem:
         #     self._voice_initialized = False
         
         # Ensure wake word detector is running (exclusive mic access)
-        if hasattr(self, '_wake_word_stopped') and self._wake_word_stopped:
+        if self._wake_word_stopped: # hasattr(self, '_wake_word_stopped') and  ########################################## see if this breaks
             try:
                 self.wake_word.start_listening()
                 self._wake_word_stopped = False
                 log_info(self.logger, "Wake word detector started in IDLE state")
             except Exception as e:
                 log_warning(self.logger, f"Failed to start wake word detector: {e}", "IDLE state")
-                # Don't spam errors - wait a bit before retrying
+                time.sleep(0.5)
                 return
         
         # Check for wake word - when detected, transition to ACTIVE
@@ -301,6 +300,8 @@ class BinDieselSystem:
             # Transition to ACTIVE state for post-wake-word functionality
             self._transition_to(State.ACTIVE)
     
+    ######################################################################################################################## handle_active_state
+    ########################################################################################################################## 
     def handle_active_state(self):
         """Handle ACTIVE state - post-wake-word: look for user hitting the pose (arm raised)"""
         # Voice commands - COMMENTED OUT
@@ -346,7 +347,7 @@ class BinDieselSystem:
         
         # Check visual detection for user with arm raised
         current_time = time.time()
-        if current_time - self.last_visual_update > self.visual_update_interval:
+        if current_time - self.last_visual_update > self.visual_update_interval: # update camera at intervals 
             try:
                 # Use cached result if available and fresh (< 100ms old)
                 if (self.cached_visual_result and 
@@ -359,20 +360,22 @@ class BinDieselSystem:
                 
                 self.last_visual_update = current_time
                 
+                # If both person and gesture detected, transition to TRACKING_USER
                 if result['person_detected'] and result['arm_raised']:
                     # User raised arm - enter autonomous mode
                     log_info(self.logger, f"Person detected with arm raised! Track ID: {result.get('track_id', 'N/A')}, "
                                          f"Angle: {result.get('angle', 'N/A'):.1f}°")
                     self._transition_to(State.TRACKING_USER)
-                    return  # Exit early - autonomous mode activated
+                    return  
                 elif result['person_detected']:
-                    # Person detected but no arm raised - log for debugging
                     conditional_log(self.logger, 'debug', 
                                   f"Person detected (no arm raised). Track ID: {result.get('track_id', 'N/A')}",
                                   self.debug_mode)
             except Exception as e:
                 log_error(self.logger, e, "Error in visual detection update")
     
+    ################################################################################################################# handle_tracking_user_state
+    ########################################################################################################################## 
     
     def handle_tracking_user_state(self):
         """Handle TRACKING_USER state - detecting and tracking user"""
@@ -400,15 +403,6 @@ class BinDieselSystem:
                 'track_id': None
             }
         
-        if not result['person_detected']:
-            # User lost - stop car and revert to tracking state to search for user
-            conditional_log(self.logger, 'info', 
-                          "User lost, stopping and searching...",
-                          config.DEBUG_MODE)
-            self.motor.stop()
-            self.servo.center()
-            # Stay in TRACKING_USER state to continue searching
-            return
         
         if result['arm_raised']:
             # User has arm raised - start following
@@ -418,6 +412,16 @@ class BinDieselSystem:
             conditional_log(self.logger, 'info',
                           "User tracking confirmed, starting to follow",
                           config.DEBUG_MODE)
+        
+        if not result['person_detected']: # IF USER IS LOST - STOP AND CONTINUE MONITORING
+            conditional_log(self.logger, 'info', 
+                          "User lost, stopping and searching...",
+                          config.DEBUG_MODE)
+            self.motor.stop()
+            self.servo.center()
+    
+    ################################################################################################################ handle_following_user_state
+    ########################################################################################################################## 
     
     def handle_following_user_state(self):
         """Handle FOLLOWING_USER state - moving toward user"""
@@ -446,18 +450,16 @@ class BinDieselSystem:
                 'track_id': None
             }
         
-        if not result['person_detected']:
-            # User lost - stop car and revert to tracking state to search for user
+        
+        if not result['person_detected']: 
             conditional_log(self.logger, 'info',
                           "User lost during following, stopping and searching...",
                           config.DEBUG_MODE)
             self.motor.stop()
             self.servo.center()
-            # Revert to TRACKING_USER state to search for user again
-            self._transition_to(State.TRACKING_USER)
+            self._transition_to(State.TRACKING_USER) # RETURN TO TRACKING USER IF USER IS LOST
             return
         
-        # Check if user is too close (TOF sensor) - only if emergency stop is enabled
         if self.tof.detect():
             print("[Main] User reached (TOF sensor), stopping -------------------")
             self.motor.stop()
@@ -472,9 +474,7 @@ class BinDieselSystem:
             conditional_log(self.logger, 'debug',
                           f"Person angle: {angle:.1f}°, centered: {result['is_centered']}",
                           self.debug_mode and config.DEBUG_VISUAL)
-            
-            # Convert angle to steering position
-            # Use configurable gain to adjust sensitivity
+
             steering_position = (angle / 45.0) * config.ANGLE_TO_STEERING_GAIN
             steering_position = max(-1.0, min(1.0, steering_position))
             
@@ -487,14 +487,14 @@ class BinDieselSystem:
             # Adjust speed based on how centered user is
             if result['is_centered']:
                 # User is centered - move forward
-                speed = config.FOLLOW_SPEED
+                speed = config.MOTOR_FAST
                 conditional_log(self.logger, 'debug',
                               f"User centered, moving forward at {speed*100:.0f}%",
                               self.debug_mode and config.DEBUG_MOTOR)
                 self.motor.forward(speed)
             else:
                 # User not centered - slow down while turning
-                speed = config.FOLLOW_SPEED * 0.7
+                speed = config.MOTOR_MEDIUM 
                 conditional_log(self.logger, 'debug',
                               f"User not centered, moving forward at {speed*100:.0f}% while turning",
                               self.debug_mode and config.DEBUG_MOTOR)
