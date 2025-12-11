@@ -28,7 +28,8 @@ class State(Enum):
 
 class StateMachine:
     def __init__(self, tracking_timeout=30.0):
-        self.state = State.IDLE  # Start in IDLE state (wake word only)
+        self.state = State.IDLE  # Start in IDLE state 
+        self.old_state = None
         self.state_enter_time = time.time()
         self.tracking_timeout = tracking_timeout
 
@@ -42,13 +43,18 @@ class StateMachine:
     def get_state(self):
         return self.state
     
+    def get_old_state(self): 
+        return self.old_state
+    
     def get_time_in_state(self):
         return time.time() - self.state_enter_time
+    
     
     def transition_to(self, new_state: State):
         if config.DEBUG_STATE:
             print(f"[SM] {self.state.name} -> {new_state.name}")
        
+        self.old_state = self.state
         self.state = new_state
         self.state_enter_time = time.time()
     
