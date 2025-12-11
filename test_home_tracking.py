@@ -62,13 +62,13 @@ class CentroidTracker:
         if not self.yolo_model:
             return False, self.last_bbox
         
-        # Re-detect marker in frame
+        # Re-detect marker in frame (use relaxed thresholds for lock mode)
         marker = detect_red_box(
             self.yolo_model,
             frame,
-            confidence_threshold=0.30,
-            color_threshold=0.35,
-            square_aspect_ratio_tolerance=0.25
+            confidence_threshold=0.20,  # Lowered for lock mode reliability
+            color_threshold=0.20,       # Lowered for lock mode reliability
+            square_aspect_ratio_tolerance=0.35  # More tolerant of shape variation
         )
         
         if marker['detected']:
@@ -210,12 +210,15 @@ class HomeMarkerTracker:
         self.show_fps = False
         self.motor_enabled = True
         
-        # Detection parameters
-        self.confidence_threshold = 0.35
-        self.color_threshold = 0.40
-        self.square_tolerance = 0.25
+        # Detection parameters (loosened for reliability)
+        self.confidence_threshold = 0.25  # Lowered from 0.35 for better detection
+        self.color_threshold = 0.25  # Lowered from 0.40 for tolerance to lighting
+        self.square_tolerance = 0.35  # Increased from 0.25 (more shape tolerance)
         self.stop_distance = config.HOME_MARKER_STOP_DISTANCE
         self.center_tolerance = config.CAMERA_WIDTH * 0.05  # 5% of width
+        
+        # Diagnostic counter
+        self.frame_diagnostics = deque(maxlen=5)  # Keep last 5 detection attempts
         
         # Servo/Motor parameters
         self.steering_gain = config.ANGLE_TO_STEERING_GAIN
@@ -259,6 +262,15 @@ class HomeMarkerTracker:
             square_aspect_ratio_tolerance=self.square_tolerance
         )
         
+        # Log diagnostic info for debugging
+        if self.frame_count % 30 == 0:  # Log every ~1 second at ~30 FPS
+            if marker['detected']:
+                diag_msg = f"[SCAN] Detected: conf={marker['confidence']:.2f}, color={marker['color_match']:.1%}, aspect={marker['aspect_ratio']:.2f}, size={marker['width']}x{marker['height']}"
+                conditional_log(self.logger, 'info', diag_msg, True)
+            else:
+                diag_msg = f"[SCAN] No detection (thresholds: conf>{self.confidence_threshold:.2f}, color>{self.color_threshold:.1%}, aspect_tol±{self.square_tolerance:.1%})"
+                conditional_log(self.logger, 'info', diag_msg, self.debug_mode)
+        
         if marker['detected']:
             # Marker found! Initialize centroid tracker and lock on
             x1 = marker['center_x'] - marker['width'] // 2
@@ -274,7 +286,7 @@ class HomeMarkerTracker:
                 self.is_scanning = False
                 self.last_detection = marker
                 self.lost_count = 0
-                log_info(self.logger, f"Marker LOCKED! Bbox: {bbox}, Confidence: {marker['confidence']:.2f}")
+                log_info(self.logger, f"Marker LOCKED! Bbox: {bbox}, Confidence: {marker['confidence']:.2f}, Color: {marker['color_match']:.1%}")
                 return marker
             else:
                 log_warning(self.logger, "Tracker initialization failed", "Continuing scan")
