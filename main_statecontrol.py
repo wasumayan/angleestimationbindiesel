@@ -375,6 +375,8 @@ class BinDieselSystem:
             # Direct angle steering (old method - no PID)
             steering_angle = max(-45.0, min(45.0, angle))  # Clamp to servo range
             self.servo.set_angle(steering_angle)
+            time.sleep(0.3)
+            self.servo.center()
             
             # Adjust speed based on how centered user is
             if result['is_centered']:
