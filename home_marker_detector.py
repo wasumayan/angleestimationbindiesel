@@ -335,52 +335,20 @@ def main():
     print("=" * 70)
     print()
     
-    # Initialize YOLO model - try OBB first, then fallback to regular YOLO
+    # Initialize YOLO model - use regular YOLO model (not OBB)
     print("[TEST] Initializing YOLO model...")
-    yolo_model = None
-    
-    # Try OBB model first (better for boxes at various angles)
-    if config.USE_NCNN:
-        try:
-            yolo_model = YOLO(config.YOLO_OBB_MODEL)
-            print(f"[TEST] YOLO OBB model loaded: {config.YOLO_OBB_MODEL}")
-        except Exception as e1:
-            print(f"[TEST] OBB model not available: {e1}")
-            print(f"[TEST] Trying regular YOLO model: {config.YOLO_MODEL}")
-            try:
-                yolo_model = YOLO(config.YOLO_MODEL)
-                print(f"[TEST] YOLO model loaded: {config.YOLO_MODEL}")
-            except Exception as e2:
-                # Fallback to PyTorch versions
-                if config.YOLO_OBB_MODEL.endswith('_ncnn_model'):
-                    fallback_obb = config.YOLO_OBB_MODEL.replace('_ncnn_model', '.pt')
-                    print(f"[TEST] Trying PyTorch OBB: {fallback_obb}")
-                    try:
-                        yolo_model = YOLO(fallback_obb)
-                        print(f"[TEST] PyTorch OBB model loaded: {fallback_obb}")
-                    except Exception as e3:
-                        print(f"[TEST] PyTorch OBB failed: {e3}")
-                        if config.YOLO_MODEL.endswith('_ncnn_model'):
-                            fallback_regular = config.YOLO_MODEL.replace('_ncnn_model', '.pt')
-                            print(f"[TEST] Trying PyTorch regular: {fallback_regular}")
-                            yolo_model = YOLO(fallback_regular)
-                            print(f"[TEST] PyTorch model loaded: {fallback_regular}")
-                        else:
-                            raise e2
-                else:
-                    raise e2
-    else:
-        # Not using NCNN, try OBB first, then regular
-        try:
-            yolo_model = YOLO(config.YOLO_OBB_MODEL)
-            print(f"[TEST] YOLO OBB model loaded: {config.YOLO_OBB_MODEL}")
-        except Exception as e1:
-            print(f"[TEST] OBB model not available: {e1}")
-            yolo_model = YOLO(config.YOLO_MODEL)
-            print(f"[TEST] YOLO model loaded: {config.YOLO_MODEL}")
-    
-    if yolo_model is None:
-        raise RuntimeError("Failed to load any YOLO model")
+    try:
+        yolo_model = YOLO(config.YOLO_MODEL)
+        print(f"[TEST] YOLO model loaded: {config.YOLO_MODEL}")
+    except Exception as e1:
+        # Fallback: if NCNN failed, try PyTorch
+        if config.USE_NCNN and config.YOLO_MODEL.endswith('_ncnn_model'):
+            fallback_path = config.YOLO_MODEL.replace('_ncnn_model', '.pt')
+            print(f"[TEST] NCNN model not found, trying PyTorch: {fallback_path}")
+            yolo_model = YOLO(fallback_path)
+            print(f"[TEST] PyTorch model loaded: {fallback_path}")
+        else:
+            raise RuntimeError(f"Failed to load YOLO model: {e1}") from e1
     
     # Initialize camera
     print("[TEST] Initializing camera...")
