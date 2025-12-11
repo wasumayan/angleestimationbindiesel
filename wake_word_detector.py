@@ -12,10 +12,8 @@ load_dotenv()
 
 try:
     import pvporcupine
-except ImportError:
-    print("ERROR: pvporcupine not installed!")
-    print("Install with: pip3 install --break-system-packages pvporcupine")
-    sys.exit(1)
+except ImportError as e:
+    raise ImportError("pvporcupine not installed. Install with: pip install pvporcupine") from e
 
 import pyaudio
 import struct

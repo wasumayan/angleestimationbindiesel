@@ -2,6 +2,7 @@
 Configuration file for Bin Diesel system
 Modify GPIO pins, PWM values, and thresholds here
 """
+import os
 
 USE_GPIO = True    # disables GPIO for local testing
 
@@ -83,7 +84,7 @@ MOTOR_FAST = 1.0  # Fast speed
 
 # Wake Word Configuration
 WAKE_WORD_MODEL_PATH = 'bin-diesel_en_raspberry-pi_v3_0_0/bin-diesel_en_raspberry-pi_v3_0_0.ppn'
-WAKE_WORD_ACCESS_KEY = None  # Set in .env file or environment variable
+WAKE_WORD_ACCESS_KEY = os.getenv('PICOVOICE_ACCESS_KEY')  # Read from environment / .env
 
 # Voice Recognition (Manual Mode)
 OPENAI_API_KEY = None  # Set in .env file or environment variable
