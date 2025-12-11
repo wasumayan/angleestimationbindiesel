@@ -105,7 +105,7 @@ HOME_MARKER_OBJECT_CLASS = 'box'  # YOLO object class to detect as home marker (
 HOME_MARKER_COLOR = 'red'  # Color of home marker (red, blue, green, etc.) - used with YOLO detection
 HOME_MARKER_CONFIDENCE = 0.3  # Minimum confidence for home marker detection
 HOME_MARKER_COLOR_THRESHOLD = 0.3  # Minimum percentage of object that must match color (0.0-1.0)
-HOME_MARKER_STOP_DISTANCE = 50  # Stop when marker is this many pixels wide (closer = larger)
+HOME_MARKER_STOP_DISTANCE = 100  # Stop when marker is this many pixels wide (closer = larger)
 TURN_180_DURATION = 3.0  # Seconds to turn 180 degrees
 
 # Performance Configuration

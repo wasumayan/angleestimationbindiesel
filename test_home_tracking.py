@@ -177,7 +177,18 @@ class HomeMarkerTracker:
         self.stop_confirm_count = 0
         self.stop_confirm_threshold = 2
         self.is_stopped = False
+        
+        # Servo state tracking (to reduce jitter from redundant center commands)
+        self.last_servo_angle = 0.0  # Track last commanded angle
+
+        self.run_flag = False
 #####################################################################################################
+    def safe_center_servo(self):
+        """Center servo only if not already centered (to reduce jitter)"""
+        if self.servo and self.last_servo_angle != 0.0:
+            self.servo.center()
+            self.last_servo_angle = 0.0
+    #####################################################################################################
     def get_frame(self):
         """Get next frame from camera or dummy source"""
         if self.use_camera and self.picam2:
@@ -203,6 +214,11 @@ class HomeMarkerTracker:
 #####################################################################################################
     def handle_scan_mode(self, frame_bgr):
         """Scan for home marker (no lock yet)"""
+
+        if self.run_flag == False:
+            self.motor.stop()
+            self.servo.center()
+
         marker = detect_red_box(
             self.yolo_model,
             frame_bgr,
@@ -227,14 +243,14 @@ class HomeMarkerTracker:
                 log_info(self.logger, f"LOCKED: conf={marker['confidence']:.2f}, color={marker['color_match']:.1%}")
                 return marker
         else:
-            if self.servo:
-                self.servo.turn_left(0.3)
-            if self.motor:
-                self.motor.forward(self.slow_speed)
+            self.servo.turn_left(0.3)
+            self.motor.forward(self.slow_speed)
         return None
 #####################################################################################################
     def handle_lock_mode(self, frame_bgr):
         """Track locked marker with servo/motor steering"""
+        self.run_flag = True
+
         if not self.tracker:
             log_warning(self.logger, "Tracker is None in lock mode", "Reverting to scan")
             self.is_locked = False
@@ -249,10 +265,9 @@ class HomeMarkerTracker:
             self.is_locked = False
             self.is_scanning = True
             self.tracker = None
-            if self.motor:
-                self.motor.stop()
-            if self.servo:
-                self.servo.center()
+            
+            self.motor.stop()
+            self.safe_center_servo()
             return None
         
         # Tracker succeeded - bbox is (x, y, w, h)
@@ -271,10 +286,9 @@ class HomeMarkerTracker:
                 self.is_locked = False
                 self.is_scanning = True
                 self.tracker = None
-                if self.motor:
-                    self.motor.stop()
-                if self.servo:
-                    self.servo.center()
+                
+                self.motor.stop()
+                self.safe_center_servo()
                 return None
         else:
             self.lost_count = 0
@@ -287,6 +301,7 @@ class HomeMarkerTracker:
         steering_angle = (offset / frame_center_x) * 45.0  # Map to [-45, 45] degrees
         steering_angle = max(-45.0, min(45.0, steering_angle))
         self.servo.set_angle(steering_angle)
+        self.last_servo_angle = steering_angle  # Track for centering check
         
         # Determine speed based on centering and distance
         if abs(offset) < self.center_tolerance:
@@ -330,7 +345,7 @@ class HomeMarkerTracker:
         if self.stop_confirm_count >= self.stop_confirm_threshold:
             log_info(self.logger, f"STOP CONDITION MET! Width: {w} >= {self.stop_distance} (confirmed)")
             self.motor.stop()
-            self.servo.center()
+            self.safe_center_servo()
             
             # mark stopped and keep last_detection for overlay
             self.is_locked = False
@@ -414,7 +429,7 @@ class HomeMarkerTracker:
                     if tof_sensor.detect():
                         log_warning(self.logger, "TOF EMERGENCY STOP triggered", "run()")
                         self.motor.stop()
-                        self.servo.center()
+                        self.safe_center_servo()
 
                         self.is_scanning = False
                         self.is_locked = False
@@ -464,8 +479,7 @@ class HomeMarkerTracker:
                     self.lost_count = 0
                     if self.motor:
                         self.motor.stop()
-                    if self.servo:
-                        self.servo.center()
+                    self.safe_center_servo()
                 elif key == ord('m'):
                     self.motor_enabled = not self.motor_enabled
                     log_info(self.logger, f"Motor: {'ENABLED' if self.motor_enabled else 'DISABLED'}")
@@ -478,8 +492,7 @@ class HomeMarkerTracker:
                     self.is_stopped = False
                     if self.motor:
                         self.motor.stop()
-                    if self.servo:
-                        self.servo.center()
+                    self.safe_center_servo()
                 
                 # Small delay to prevent CPU spinning
                 time.sleep(0.01)
@@ -507,7 +520,7 @@ class HomeMarkerTracker:
         
         if self.servo:
             try:
-                self.servo.center()
+                self.safe_center_servo()
                 self.servo.cleanup()
             except Exception as e:
                 log_warning(self.logger, f"Error stopping servo: {e}", "Cleanup")
