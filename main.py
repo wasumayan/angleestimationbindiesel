@@ -43,6 +43,15 @@ class BinDieselSystem:
         log_info(self.logger, "=" * 70)
         log_info(self.logger, "Bin Diesel System Initializing...")
         log_info(self.logger, "=" * 70)
+    
+    def _transition_to(self, new_state):
+        """Transition to a new state with highlighted logging"""
+        current_state = self.sm.get_state()
+        if current_state != new_state:
+            log_info(self.logger, "=" * 70)
+            log_info(self.logger, f"STATE TRANSITION: {current_state.name} -> {new_state.name}")
+            log_info(self.logger, "=" * 70)
+        self.sm.transition_to(new_state)
         
         # Initialize state machine
         self.sm = StateMachine(
@@ -251,7 +260,6 @@ class BinDieselSystem:
     #         log_warning(self.logger, f"Failed to initialize hand gesture controller: {e}", "Manual mode hand gestures will not be available")
     #         self.gesture_controller = None
     #         return False
-    
     def signal_handler(self, signum, frame):
         """Handle shutdown signals"""
         log_info(self.logger, "Shutdown signal received, cleaning up...")
@@ -295,7 +303,7 @@ class BinDieselSystem:
                 log_warning(self.logger, f"Error stopping wake word detector: {e}", "State transition")
             
             # Transition to ACTIVE state for post-wake-word functionality
-            self.sm.transition_to(State.ACTIVE)
+            self._transition_to(State.ACTIVE)
     
     def handle_active_state(self):
         """Handle ACTIVE state - post-wake-word: look for user hitting the pose (arm raised)"""
@@ -359,7 +367,7 @@ class BinDieselSystem:
                     # User raised arm - enter autonomous mode
                     log_info(self.logger, f"Person detected with arm raised! Track ID: {result.get('track_id', 'N/A')}, "
                                          f"Angle: {result.get('angle', 'N/A'):.1f}°")
-                    self.sm.transition_to(State.TRACKING_USER)
+                    self._transition_to(State.TRACKING_USER)
                     return  # Exit early - autonomous mode activated
                 elif result['person_detected']:
                     # Person detected but no arm raised - log for debugging
@@ -410,20 +418,13 @@ class BinDieselSystem:
             # User has arm raised - start following
             log_info(self.logger, f"Arm raised detected! Track ID: {result.get('track_id', 'N/A')}, "
                                  f"Angle: {result.get('angle', 'N/A'):.1f}°")
-            self.sm.transition_to(State.FOLLOWING_USER)
+            self._transition_to(State.FOLLOWING_USER)
             conditional_log(self.logger, 'info',
                           "User tracking confirmed, starting to follow",
                           config.DEBUG_MODE)
     
     def handle_following_user_state(self):
         """Handle FOLLOWING_USER state - moving toward user"""
-        # Check TOF sensor for emergency stop (only if enabled)
-        if self.tof and config.EMERGENCY_STOP_ENABLED:
-            if self.tof.detect():
-                print("[Main] EMERGENCY STOP: Object too close!")
-                self.motor.stop()
-                self.servo.center()
-                return
         
         # Update visual detection (use cached if available)
         current_time = time.time()
@@ -457,17 +458,16 @@ class BinDieselSystem:
             self.motor.stop()
             self.servo.center()
             # Revert to TRACKING_USER state to search for user again
-            self.sm.transition_to(State.TRACKING_USER)
+            self._transition_to(State.TRACKING_USER)
             return
         
         # Check if user is too close (TOF sensor) - only if emergency stop is enabled
-        if self.tof and config.EMERGENCY_STOP_ENABLED:
-            if self.tof.detect():
-                print("[Main] User reached (TOF sensor), stopping")
-                self.motor.stop()
-                self.servo.center()
-                self.sm.transition_to(State.STOPPED)
-                return
+        if self.tof.detect():
+            print("[Main] User reached (TOF sensor), stopping -------------------")
+            self.motor.stop()
+            self.servo.center()
+            self._transition_to(State.STOPPED)
+            return
         
         # Calculate steering based on angle
         if result['angle'] is not None:
@@ -508,8 +508,8 @@ class BinDieselSystem:
             # No angle data - stop
             self.motor.stop()
             self.servo.center()
-            self.sm.transition_to(State.IDLE)
-            log_info(self.logger, "No angle data - returning to IDLE state")
+            self._transition_to(State.TRACKING_USER)
+            log_info(self.logger, "No angle data - returning to TRACKING_USER state")
     
     def handle_stopped_state(self):
         """Handle STOPPED state - at target distance, waiting for trash collection"""
@@ -517,7 +517,7 @@ class BinDieselSystem:
         wait_time = 10.0  # Wait 10 seconds for trash placement
         if self.sm.get_time_in_state() > wait_time:
             log_info(self.logger, "Trash collection complete, returning to home")
-            self.sm.transition_to(State.HOME)
+            self._transition_to(State.HOME)
     
     def _check_color_match(self, frame, bbox, target_color):
         """
@@ -725,7 +725,7 @@ class BinDieselSystem:
                     # Clean up return state
                     if hasattr(self, 'return_turn_complete'):
                         delattr(self, 'return_turn_complete')
-                    self.sm.transition_to(State.IDLE)
+                    self._transition_to(State.IDLE)
                     return
                 
                 # Drive towards marker
@@ -756,7 +756,7 @@ class BinDieselSystem:
             self.servo.center()
             if hasattr(self, 'return_turn_complete'):
                 delattr(self, 'return_turn_complete')
-            self.sm.transition_to(State.IDLE)
+            self._transition_to(State.IDLE)
     
     # def handle_manual_mode_state(self):
     #     """Handle MANUAL_MODE state - waiting for voice commands and hand gestures - COMMENTED OUT"""
@@ -792,7 +792,7 @@ class BinDieselSystem:
     #             self.current_manual_command = None
     #             self.motor.stop()
     #             self.servo.center()
-    #             self.sm.transition_to(State.IDLE)
+    #             self._transition_to(State.IDLE)
     #         elif command == 'STOP':
     #             # Stop current command
     #             print(f"[Main] Stopping current command (from {'voice' if voice_command else 'gesture'})")
@@ -890,7 +890,7 @@ class BinDieselSystem:
     #                           config.DEBUG_MODE)
     #             self.motor.stop()
     #             self.servo.center()
-    #             self.sm.transition_to(State.IDLE)
+    #             self._transition_to(State.IDLE)
     #         return
     #     
     #     # Select target violator (prioritize most recent or closest)

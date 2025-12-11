@@ -79,15 +79,11 @@ def main():
     
     models_to_convert = []
     
-    # Standard models from config
-    if hasattr(config, 'YOLO_MODEL') and config.YOLO_MODEL:
-        models_to_convert.append(('YOLO_MODEL', config.YOLO_MODEL, 'yolo11n_ncnn'))
-    
-    if hasattr(config, 'YOLO_POSE_MODEL') and config.YOLO_POSE_MODEL:
-        models_to_convert.append(('YOLO_POSE_MODEL', config.YOLO_POSE_MODEL, 'yolo11n-pose_ncnn'))
-    
-    if hasattr(config, 'YOLO_OBB_MODEL') and config.YOLO_OBB_MODEL:
-        models_to_convert.append(('YOLO_OBB_MODEL', config.YOLO_OBB_MODEL, 'yolo11n-obb_ncnn'))
+    # Standard models - use .pt files for conversion (will auto-download if needed)
+    # These are the base model names that YOLO will download if not found
+    models_to_convert.append(('YOLO_MODEL', 'yolo11n.pt', 'yolo11n_ncnn'))
+    models_to_convert.append(('YOLO_POSE_MODEL', 'yolo11n-pose.pt', 'yolo11n-pose_ncnn'))
+    models_to_convert.append(('YOLO_OBB_MODEL', 'yolo11n-obb.pt', 'yolo11n-obb_ncnn'))
     
     # Custom trained models
     if hasattr(config, 'YOLO_CLOTHING_MODEL') and config.YOLO_CLOTHING_MODEL:

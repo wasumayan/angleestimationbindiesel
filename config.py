@@ -62,7 +62,7 @@ HAND_GESTURE_HOLD_TIME = 0.5  # Seconds gesture must be held before executing
 YOLO_CONFIDENCE = 0.01  # Very low confidence for arm detection (confidence boundaries removed)
 YOLO_PERSON_CONFIDENCE = 0.3  # Minimum confidence for person detection (higher threshold to avoid false positives)
 PERSON_CENTER_THRESHOLD = 30  # Pixels from center to consider "centered"
-ANGLE_TO_STEERING_GAIN = 0.5  # How much to turn based on angle
+ANGLE_TO_STEERING_GAIN = 0.65  # How much to turn based on angle
 TRACKING_TIMEOUT = 30.0  # Seconds before returning to idle if no user detected
 
 # Arm Angle Detection Configuration
