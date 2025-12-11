@@ -24,6 +24,11 @@ PWM_FREQUENCY = 40  # Alias for motor frequency
 
 MOTOR_STOP = 100.0      # 0% duty cycle = stopped
 MOTOR_MAX = 97       # 100% duty cycle = maximum speed 93.7 
+# Motor Speed Configuration
+FOLLOW_SPEED = 1.0  # Speed when following user (0.0-1.0)
+MOTOR_SLOW = 0.5  # Slow speed for turning
+MOTOR_MEDIUM = 0.75  # Medium speed
+MOTOR_FAST = 1.0  # Fast speed
 
 # Servo Control Values (PWM duty cycle percentages)
 PWM_FREQUENCY_SERVO = 50 #HZ
@@ -76,12 +81,6 @@ ARM_WRIST_ABOVE_SHOULDER_TOLERANCE = 30  # Pixels tolerance for wrist above shou
 ARM_ELBOW_ANGLE_MIN = 45.0  # Minimum elbow bend angle (degrees)
 ARM_ELBOW_ANGLE_MAX = 160.0  # Maximum elbow bend angle (degrees)
 
-# Motor Speed Configuration
-FOLLOW_SPEED = 1.0  # Speed when following user (0.0-1.0)
-MOTOR_SLOW = 0.5  # Slow speed for turning
-MOTOR_MEDIUM = 0.75  # Medium speed
-MOTOR_FAST = 1.0  # Fast speed
-
 # Wake Word Configuration
 WAKE_WORD_MODEL_PATH = 'bin-diesel_en_raspberry-pi_v3_0_0/bin-diesel_en_raspberry-pi_v3_0_0.ppn'
 WAKE_WORD_ACCESS_KEY = os.getenv('PICOVOICE_ACCESS_KEY')  # Read from environment / .env
@@ -130,7 +129,7 @@ YOLO_AGNOSTIC_NMS = True  # Class-agnostic NMS (faster, slight accuracy tradeoff
 DEBUG_MODE = False  # Enable debug logging throughout system
 DEBUG_VISUAL = True  # Debug visual detection specifically
 DEBUG_MOTOR = True  # Debug motor commands
-DEBUG_SERVO = False  # Debug servo commands
+DEBUG_SERVO = True  # Debug servo commands
 DEBUG_TOF = False  # Debug TOF sensor readings
 DEBUG_VOICE = True  # Debug voice recognition
 DEBUG_STATE = True  # Debug state machine transitions

@@ -3,6 +3,7 @@ Test script for ServoController without hardware
 """
 
 from servo_controller import ServoController
+from motor_controller import MotorController
 import time
 import config
 
@@ -18,10 +19,20 @@ def main():
         right_max_duty = config.SERVO_RIGHT_MAX
     )
 
+    motor = MotorController(
+            pwm_pin=config.MOTOR_PWM_PIN,
+            frequency=config.PWM_FREQUENCY
+        )
+    
+    motor.stop()
+
     # Test center position
     print("\nCentering servo")
     servo.center()
     time.sleep(3.0 )
+
+    motor.forward(config.MOTOR_SLOW)
+
 
 # Turn left
     print("Turning left to -30°...")
