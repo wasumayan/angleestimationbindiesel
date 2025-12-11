@@ -107,7 +107,9 @@ HOME_MARKER_CONFIDENCE = 0.3  # Minimum confidence for home marker detection
 HOME_MARKER_COLOR_THRESHOLD = 0.3  # Minimum percentage of object that must match color (0.0-1.0)
 HOME_MARKER_STOP_DISTANCE = 100  # Stop when marker is this many pixels wide (closer = larger)
 HOME_MARKER_SLOW_DISTANCE = 50
-TURN_180_DURATION = 6.2  # Seconds to turn 180 degrees
+TURN_180_DURATION = 5.9  # Seconds to turn 180 degrees
+
+SLEEP_TIMER = 0.2
 
 # Performance Configuration
 ENABLE_FRAME_CACHING = True  # Cache frames to reduce redundant captures
@@ -129,8 +131,8 @@ YOLO_AGNOSTIC_NMS = True  # Class-agnostic NMS (faster, slight accuracy tradeoff
 # Debug Configuration
 DEBUG_MODE = False  # Enable debug logging throughout system
 DEBUG_VISUAL = True  # Debug visual detection specifically
-DEBUG_MOTOR = True  # Debug motor commands
-DEBUG_SERVO = True  # Debug servo commands
+DEBUG_MOTOR = False  # Debug motor commands
+DEBUG_SERVO = False  # Debug servo commands
 DEBUG_TOF = False  # Debug TOF sensor readings
 DEBUG_VOICE = True  # Debug voice recognition
 DEBUG_STATE = True  # Debug state machine transitions

@@ -351,7 +351,7 @@ class BinDieselSystem:
         
         # Calculate steering based on angle 
         if result['angle'] is not None:
-            self.sleeptimer = 0.3  # reset sleep timer
+            self.sleeptimer = config.SLEEP_TIMER  # reset sleep timer
             angle = result['angle']    
             conditional_log(self.logger, 'debug', f"Person angle: {angle:.1f}°, centered: {result['is_centered']}",
                           self.debug_mode and config.DEBUG_VISUAL)
@@ -361,7 +361,7 @@ class BinDieselSystem:
             steering_angle = max(-45.0, min(45.0, angle))  # Clamp to servo range
             self.servo.set_angle(steering_angle)
             self.last_error_angle = steering_angle 
-            time.sleep(0.4)
+            time.sleep(0.25)
             self.servo.center()
             
             # Adjust speed based on how centered user is
