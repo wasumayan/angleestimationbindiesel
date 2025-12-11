@@ -45,3 +45,4 @@ ENV/
 # Downloaded YOLO model files (auto-downloaded, don't commit)
 *.pt
 !models/**/*.pt  # But keep trained models in models/ directory
+__pycache__/
