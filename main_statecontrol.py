@@ -335,7 +335,7 @@ class BinDieselSystem:
             log_info(self.logger, "User lost during following, going other way...")
             self.motor.forward(config.MOTOR_SLOW)
             # steer opposite of last known error to search
-            self.servo.set_angle(self.last_error_angle * -1)
+            self.servo.set_angle(self.last_error_angle * -2)
             self.target_track_id = None  # Clear target track_id
             time.sleep(0.5)
 
