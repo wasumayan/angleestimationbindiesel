@@ -22,7 +22,7 @@ class ToFSensor:
         
         # Simple debouncing: require multiple consecutive HIGH readings
         self.high_count = 0
-        self.high_threshold = getattr(config, 'TOF_HIGH_COUNT_THRESHOLD', 3)
+        self.high_threshold = getattr(config, 'TOF_HIGH_COUNT_THRESHOLD', 2)
 
         if config.DEBUG_TOF:
             print(f"[ToF] Initialized digital input on pin {config.ToF_DIGITAL_PIN} with pull-down resistor")

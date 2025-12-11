@@ -39,15 +39,7 @@ def main():
     servo.set_angle(-30.0)
     time.sleep(3.0)
 
-        # Back to center
-    print("Back to center...")
-    servo.center()
-    time.sleep(3.0)
 
-        # Turn right
-    print("Turning right to +30°...")
-    servo.set_angle(30.0)
-    time.sleep(3.0)
 
         # Back to center again
     print("Back to center again...")

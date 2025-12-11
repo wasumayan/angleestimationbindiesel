@@ -22,6 +22,7 @@ class ServoController:
         self.center_duty = center_duty
         self.left_max_duty = left_max_duty
         self.right_max_duty = right_max_duty
+        self.last_angle = None 
         self.pwm = None
 
         if config.USE_GPIO:
@@ -37,6 +38,9 @@ class ServoController:
                 f"left_max={self.left_max_duty:.2f}%, "
                 f"right_max={self.right_max_duty:.2f}%"
             )
+
+    def last_angle(self):
+        return self.last_angle
 
     def _set_duty(self, duty):
 
@@ -72,6 +76,7 @@ class ServoController:
             print(f"[Servo] set_angle({angle_deg:.1f}) degrees -> duty = {duty:.2f}%")
 
         self._set_duty(duty)
+        self.last_angle = angle_deg
 
     def set_position(self, position: float):
         """

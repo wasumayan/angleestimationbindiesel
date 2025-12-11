@@ -341,17 +341,7 @@ class BinDieselSystem:
 
             return
         
-        if self.tof.detect():
-            log_info(self.logger, "=" * 70)
-            log_info(self.logger, "=" * 70)
-            print("[Main] User reached (TOF sensor), stopping")
-            conditional_log(self.logger, 'debug', f"ToF = {self.tof.detect()}", config.DEBUG_MODE)
-            log_info(self.logger, "=" * 70)
-            log_info(self.logger, "=" * 70)
-            self.motor.stop()
-            self.servo.center()
-            self._transition_to(State.STOPPED)
-            return
+        # (TOF check now happens at top of run() for immediate emergency response)
         
         # Calculate steering based on angle 
         if result['angle'] is not None:
@@ -493,6 +483,22 @@ class BinDieselSystem:
         """Main control loop"""
         try:
             while self.running:
+                # SAFETY: Check TOF sensor FIRST before any other processing
+                # This ensures immediate emergency stop response
+                if self.tof and self.tof.detect():
+                    # Emergency stop triggered by TOF
+                    log_info(self.logger, "=" * 70)
+                    log_info(self.logger, "EMERGENCY STOP: TOF sensor triggered!")
+                    log_info(self.logger, "=" * 70)
+                    self.motor.stop()
+                    self.servo.center()
+                    # Transition to STOPPED state if currently in a movement state
+                    state = self.sm.get_state()
+                    if state in (State.FOLLOWING_USER, State.TRACKING_USER):
+                        self._transition_to(State.STOPPED)
+                    time.sleep(0.05)  # Small delay to allow motor to stop
+                    continue  # Skip all other processing this frame
+                
                 # Update performance monitor
                 self.performance_monitor.update()
                 self.frame_count += 1

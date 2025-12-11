@@ -98,7 +98,7 @@ EMERGENCY_STOP_ENABLED = False  # Enable TOF emergency stop
 TOF_STOP_DISTANCE_MM = 200  # Stop when within 30cm
 TOF_LOW_VOLTAGE_THRESHOLD = 2.2  # Voltage threshold below which signal is treated as LOW (V) - note: GPIO can't read exact voltage, this is for reference
 TOF_DEBOUNCE_TIME = 0.05  # Debounce time in seconds (50ms) to filter noise
-TOF_HIGH_COUNT_THRESHOLD = 5  # Number of consecutive HIGH readings required to trigger (increased for 2.2V threshold - more conservative)
+TOF_HIGH_COUNT_THRESHOLD = 1  # Number of consecutive HIGH readings required to trigger (set to 1 for immediate response; use 2-3 if noise is an issue)
 
 # Home Marker Configuration (for return to home)
 HOME_MARKER_OBJECT_CLASS = 'box'  # YOLO object class to detect as home marker (e.g., 'box', 'backpack', 'suitcase')
