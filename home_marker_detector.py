@@ -75,7 +75,7 @@ def check_color_match_red(frame, bbox):
     return color_match_ratio
 
 
-def detect_red_box(yolo_model, frame, confidence_threshold=0.3, color_threshold=0.3, square_aspect_ratio_tolerance=0.3):
+def detect_red_box(yolo_model, frame, confidence_threshold=0.3, color_threshold=0.3, square_aspect_ratio_tolerance=0.45):
     """
     Detect red square object using YOLO object detection + OpenCV color tracking
     Uses YOLO to get bounding boxes (ignores labels), checks for red color and square dimensions

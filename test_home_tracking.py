@@ -165,6 +165,7 @@ class HomeMarkerTracker:
         self.color_threshold = 0.25
         self.square_tolerance = 0.45
         self.stop_distance = config.HOME_MARKER_STOP_DISTANCE
+        self.slow_threshold = config.HOME_MARKER_SLOW_DISTANCE
         self.center_tolerance = config.CAMERA_WIDTH * 0.1
         
         # Servo/Motor parameters
@@ -182,6 +183,7 @@ class HomeMarkerTracker:
         self.last_servo_angle = 0.0  # Track last commanded angle
 
         self.run_flag = False
+        self.approach_flag = False
 #####################################################################################################
     def safe_center_servo(self):
         """Center servo only if not already centered (to reduce jitter)"""
@@ -304,14 +306,15 @@ class HomeMarkerTracker:
         self.last_servo_angle = steering_angle  # Track for centering check
         
         # Determine speed based on centering and distance
-        if abs(offset) < self.center_tolerance:
-            # Marker is centered - move faster
-            speed = self.medium_speed
-            speed_str = "MEDIUM"
-        else:
-            # Marker off-center - move slower
-            speed = self.slow_speed
-            speed_str = "SLOW"
+        if self.approach_flag == False:
+            if abs(offset) < self.center_tolerance:
+                speed = self.medium_speed
+                speed_str = "MEDIUM"
+  
+            else:
+                # Marker off-center - move slower
+                speed = self.slow_speed
+                speed_str = "SLOW"
         
         # Move forward if motor enabled
         if self.motor_enabled and self.motor:
@@ -342,6 +345,12 @@ class HomeMarkerTracker:
                 log_info(self.logger, f"Stop candidate ignored: width={w} >= {self.stop_distance} but not centered (offset={offset:.0f}px)")
             self.stop_confirm_count = 0
 
+        if self.stop_confirm_count >= self.slow_threshold:
+            log_info(self.logger, f"SLOW CONDITION MET! Width: {w} >= {self.slow_threshold} (confirmed)")
+            self.motor.forward(self.slow_speed * 0.9)
+            self.approach_flag = True
+
+
         if self.stop_confirm_count >= self.stop_confirm_threshold:
             log_info(self.logger, f"STOP CONDITION MET! Width: {w} >= {self.stop_distance} (confirmed)")
             self.motor.stop()
@@ -352,6 +361,7 @@ class HomeMarkerTracker:
             self.tracker = None
             self.is_stopped = True
             self.stop_confirm_count = 0
+            self.approach_flag = False
         
         return detection
 #####################################################################################################
@@ -435,6 +445,7 @@ class HomeMarkerTracker:
                         self.is_locked = False
                         self.is_stopped = False
                         self.tracker = None
+                        self.approach_flag = False
                         continue
                 except Exception as e:
                     log_warning(self.logger, f"TOF check error: {e}", "run()")
