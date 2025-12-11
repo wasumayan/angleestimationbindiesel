@@ -420,7 +420,7 @@ class BinDieselSystem:
         # Step 1: Turn 180 degrees (only once when entering this state)
         if not hasattr(self, 'return_turn_complete'):
             log_info(self.logger, "Returning to home: Turning 180 degrees...")
-            self.motor.forward(config.MOTOR_FAST)  # Stop before turning
+            self.motor.forward(1.1)  # Stop before turning
             # Turn left max (or right max - you can change this)
             self.servo.turn_left(1.0)  # Max left turn
             time.sleep(config.TURN_180_DURATION)  # Turn for specified duration

@@ -23,7 +23,7 @@ PWM_FREQUENCY_MOTOR = 40  #Hz
 PWM_FREQUENCY = 40  # Alias for motor frequency
 
 MOTOR_STOP = 100.0      # 0% duty cycle = stopped
-MOTOR_MAX = 93.5       # 100% duty cycle = maximum speed 93.7 
+MOTOR_MAX = 93.4       # 100% duty cycle = maximum speed 93.7 
 # Motor Speed Configuration
 FOLLOW_SPEED = 1.0  # Speed when following user (0.0-1.0)
 MOTOR_SLOW = 1.01  # Slow speed for turning
@@ -33,7 +33,7 @@ MOTOR_FAST = 1.0  # Fast speed
 # Servo Control Values (PWM duty cycle percentages)
 PWM_FREQUENCY_SERVO = 50 #HZ
 
-SERVO_CENTER = 92.650
+SERVO_CENTER = 92.600
 SERVO_LEFT_MAX = 95.422 
 SERVO_RIGHT_MAX = 89.318 
 
@@ -94,7 +94,6 @@ VOICE_COMMAND_TIMEOUT = 5.0  # Seconds to wait for voice command
 # Safety Configuration
 EMERGENCY_STOP_ENABLED = False  # Enable TOF emergency stop
 TOF_STOP_DISTANCE_MM = 200  # Stop when within 30cm
-TOF_EMERGENCY_DISTANCE_MM = 100  # Emergency stop when within 10cm
 TOF_LOW_VOLTAGE_THRESHOLD = 2.2  # Voltage threshold below which signal is treated as LOW (V) - note: GPIO can't read exact voltage, this is for reference
 TOF_DEBOUNCE_TIME = 0.05  # Debounce time in seconds (50ms) to filter noise
 TOF_HIGH_COUNT_THRESHOLD = 5  # Number of consecutive HIGH readings required to trigger (increased for 2.2V threshold - more conservative)
@@ -106,7 +105,7 @@ HOME_MARKER_CONFIDENCE = 0.3  # Minimum confidence for home marker detection
 HOME_MARKER_COLOR_THRESHOLD = 0.3  # Minimum percentage of object that must match color (0.0-1.0)
 HOME_MARKER_STOP_DISTANCE = 100  # Stop when marker is this many pixels wide (closer = larger)
 HOME_MARKER_SLOW_DISTANCE = 50
-TURN_180_DURATION = 3.0  # Seconds to turn 180 degrees
+TURN_180_DURATION = 5.0  # Seconds to turn 180 degrees
 
 # Performance Configuration
 ENABLE_FRAME_CACHING = True  # Cache frames to reduce redundant captures
