@@ -84,6 +84,7 @@ class BinDieselSystem:
             sys.exit(1)
         
         self.servo.center()
+        self.last_servo_angle = 0.0  # Track that servo is centered
         time.sleep(3.0)
         
         # Initialize TOF sensor
@@ -162,6 +163,9 @@ class BinDieselSystem:
         self.pid_error_integral = 0.0  # Accumulated error over time
         self.pid_last_error = None  # Previous error for derivative calculation (None = first frame, skip derivative)
         
+        # Servo state tracking (to reduce jitter from redundant center commands)
+        self.last_servo_angle = None  # Track last commanded servo angle
+        
         # Performance optimizations
         self.frame_cache = FrameCache(max_age=0.05)  # Cache frames for 50ms
         self.performance_monitor = PerformanceMonitor()
@@ -213,6 +217,12 @@ class BinDieselSystem:
         """Reset PID state to avoid integral windup and stale errors"""
         self.pid_error_integral = 0.0
         self.pid_last_error = None  # Set to None so derivative is skipped on first frame
+    
+    def safe_center_servo(self):
+        """Center servo only if it's not already centered (reduces jitter)"""
+        if self.last_servo_angle != 0.0:
+            self.servo.center()
+            self.last_servo_angle = 0.0
         
     ########################################################################################################################## handle_idle_state
     ##############################################################################################################################
@@ -360,26 +370,10 @@ class BinDieselSystem:
             conditional_log(self.logger, 'debug',
                           f"Person angle: {angle:.1f}°, centered: {result['is_centered']}",
                           self.debug_mode and config.DEBUG_VISUAL)
-
-            # PID steering control to handle servo latency
-            error = angle  # Error term: deviation from center (0°)
-            self.pid_error_integral += error  # Accumulate error over time
             
-            # Compute derivative only if we have a previous error (skip on first frame)
-            if self.pid_last_error is not None:
-                pid_error_derivative = error - self.pid_last_error  # Rate of change
-            else:
-                pid_error_derivative = 0.0  # No derivative on first frame (prevents spike)
             
-            self.pid_last_error = error  # Store for next iteration
-            
-            # Calculate PID output (steering angle)
-            steering_angle = (
-                self.pid_kp * error +
-                self.pid_ki * self.pid_error_integral +
-                self.pid_kd * pid_error_derivative
-            )
-            steering_angle = max(-45.0, min(45.0, steering_angle))
+            # Direct angle steering (old method - no PID)
+            steering_angle = max(-45.0, min(45.0, angle))  # Clamp to servo range
             self.servo.set_angle(steering_angle)
             
             # Adjust speed based on how centered user is
@@ -401,7 +395,7 @@ class BinDieselSystem:
             # No angle data, approaching use? 
             conditional_log(self.logger, 'info', "No angle data, approaching user? Moving slow", config.DEBUG_MODE)
             self.motor.forward(config.MOTOR_SLOW)
-            self.servo.center()
+            self.safe_center_servo()
             # self._transition_to(State.TRACKING_USER)
             log_info(self.logger, "No angle data")
     
