@@ -343,32 +343,27 @@ class BinDieselSystem:
                           self.debug_mode and config.DEBUG_VISUAL)
 
             steering_position = (angle / 45.0) * config.ANGLE_TO_STEERING_GAIN
-            steering_position = max(-1.0, min(1.0, steering_position))
-            
-            conditional_log(self.logger, 'debug',
-                          f"Setting servo angle: {angle:.1f}° (position: {steering_position:.2f})",
-                          self.debug_mode and config.DEBUG_SERVO)
-            
+            steering_position = max(-1.0, min(1.0, steering_position))         
             self.servo.set_angle(angle)
             
             # Adjust speed based on how centered user is
             if result['is_centered']:
                 # User is centered - move forward
                 speed = config.MOTOR_FAST
-                conditional_log(self.logger, 'debug',
-                              f"User centered, moving forward at {speed*100:.0f}%",
-                              self.debug_mode and config.DEBUG_MOTOR)
+                conditional_log(self.logger, 'info',
+                              f"User CENTERED, moving forward at {speed*100:.0f}%", config.DEBUG_MODE)
                 self.motor.forward(speed)
+                time.sleep(0.5)
             else:
                 # User not centered - slow down while turning
                 speed = config.MOTOR_MEDIUM 
-                conditional_log(self.logger, 'debug',
-                              f"User not centered, moving forward at {speed*100:.0f}% while turning",
-                              self.debug_mode and config.DEBUG_MOTOR)
+                conditional_log(self.logger, 'info',
+                              f"User not centered, moving forward at {speed*100:.0f}% while turning", config.DEBUG_MODE)
                 self.motor.forward(speed)
                 
         else:
             # No angle data, approaching use? 
+            conditional_log(self.logger, 'info', "No angle data, approaching user? Moving slow", config.DEBUG_MODE)
             self.motor.forward(config.MOTOR_SLOW)
             self.servo.center()
             # self._transition_to(State.TRACKING_USER)
