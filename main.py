@@ -25,6 +25,7 @@ from tof_sensor import ToFSensor
 # from hand_gesture_controller import HandGestureController, get_gesture_command
 from logger import setup_logger, log_error, log_warning, log_info, log_debug
 from optimizations import FrameCache, PerformanceMonitor, conditional_log, skip_frames
+from home_marker_detector import detect_red_box
 
 
 class BinDieselSystem:
@@ -465,17 +466,11 @@ class BinDieselSystem:
             # Only follow if the detected person matches our target track_id
             if result.get('track_id') != self.target_track_id:
                 # Different person detected - treat as person lost
-                conditional_log(self.logger, 'info',
-                              f"Target person (Track ID: {self.target_track_id}) not found, "
-                              f"detected person has Track ID: {result.get('track_id', 'N/A')}",
-                              config.DEBUG_MODE)
                 result['person_detected'] = False  # Treat as person lost
         
         if not result['person_detected']:
             # User lost - stop car and revert to tracking state to search for user
-            conditional_log(self.logger, 'info',
-                          f"User lost during following (Track ID: {self.target_track_id}), stopping and searching...",
-                          config.DEBUG_MODE)
+            log_info(self.logger, "User lost during following, stopping and searching...")
             self.motor.stop()
             self.servo.center()
             self.target_track_id = None  # Clear target track_id
@@ -538,170 +533,6 @@ class BinDieselSystem:
             log_info(self.logger, "Trash collection complete, returning to home")
             self._transition_to(State.HOME)
     
-    def _check_color_match(self, frame, bbox, target_color):
-        """
-        Check if object in bounding box matches target color
-        
-        Args:
-            frame: RGB frame
-            bbox: Bounding box (x1, y1, x2, y2)
-            target_color: Color name ('red', 'blue', 'green', etc.)
-            
-        Returns:
-            float: Percentage of pixels matching color (0.0-1.0)
-        """
-        import cv2
-        import numpy as np
-        
-        x1, y1, x2, y2 = bbox
-        h, w = frame.shape[:2]
-        
-        # Ensure coordinates are within frame bounds
-        x1 = max(0, min(x1, w))
-        y1 = max(0, min(y1, h))
-        x2 = max(0, min(x2, w))
-        y2 = max(0, min(y2, h))
-        
-        if x2 <= x1 or y2 <= y1:
-            return 0.0
-        
-        # Extract object region
-        roi = frame[y1:y2, x1:x2]
-        if roi.size == 0:
-            return 0.0
-        
-        # Convert RGB to HSV for better color detection
-        hsv = cv2.cvtColor(roi, cv2.COLOR_RGB2HSV)
-        
-        # Define color ranges in HSV
-        color_ranges = {
-            'red': [
-                (np.array([0, 50, 50]), np.array([10, 255, 255])),
-                (np.array([170, 50, 50]), np.array([180, 255, 255]))
-            ],
-            'blue': [
-                (np.array([100, 50, 50]), np.array([130, 255, 255]))
-            ],
-            'green': [
-                (np.array([40, 50, 50]), np.array([80, 255, 255]))
-            ],
-            'yellow': [
-                (np.array([20, 50, 50]), np.array([30, 255, 255]))
-            ],
-            'orange': [
-                (np.array([10, 50, 50]), np.array([20, 255, 255]))
-            ],
-            'purple': [
-                (np.array([130, 50, 50]), np.array([160, 255, 255]))
-            ],
-            'pink': [
-                (np.array([160, 50, 50]), np.array([170, 255, 255]))
-            ]
-        }
-        
-        target_color_lower = target_color.lower()
-        if target_color_lower not in color_ranges:
-            # Unknown color - return 0 (no match)
-            return 0.0
-        
-        # Create mask for target color
-        mask = np.zeros(hsv.shape[:2], dtype=np.uint8)
-        for lower, upper in color_ranges[target_color_lower]:
-            mask += cv2.inRange(hsv, lower, upper)
-        
-        # Calculate percentage of pixels matching color
-        total_pixels = mask.size
-        matching_pixels = np.count_nonzero(mask)
-        color_match_ratio = matching_pixels / total_pixels if total_pixels > 0 else 0.0
-        
-        return color_match_ratio
-    
-    def _detect_home_marker(self, frame):
-        """
-        Detect home marker using YOLO object detection + color tracking
-        Combines object class detection with color matching for robust detection
-        
-        Args:
-            frame: RGB frame from camera
-            
-        Returns:
-            dict with marker info: {'detected': bool, 'center_x': int, 'center_y': int, 'width': int, 'area': int, 'confidence': float, 'color_match': float}
-        """
-        if self.home_marker_model is None:
-            return {'detected': False, 'center_x': None, 'center_y': None, 'width': None, 'area': None, 'confidence': None, 'color_match': None}
-        
-        try:
-            # Run YOLO object detection
-            results = self.home_marker_model(
-                frame,
-                conf=config.HOME_MARKER_CONFIDENCE,
-                verbose=False,
-                imgsz=config.YOLO_INFERENCE_SIZE,
-                max_det=config.YOLO_MAX_DET
-            )
-            
-            if not results or len(results) == 0:
-                return {'detected': False, 'center_x': None, 'center_y': None, 'width': None, 'area': None, 'confidence': None, 'color_match': None}
-            
-            result = results[0]
-            
-            # Check if we have any detections
-            if result.boxes is None or len(result.boxes) == 0:
-                return {'detected': False, 'center_x': None, 'center_y': None, 'width': None, 'area': None, 'confidence': None, 'color_match': None}
-            
-            # Look for the specified object class (e.g., 'box') that also matches the target color
-            target_class = config.HOME_MARKER_OBJECT_CLASS.lower()
-            target_color = config.HOME_MARKER_COLOR.lower()
-            best_detection = None
-            best_score = 0.0  # Combined score: confidence * color_match
-            
-            for box in result.boxes:
-                class_id = int(box.cls[0])
-                confidence = float(box.conf[0])
-                class_name = self.home_marker_model.names[class_id].lower()
-                
-                # Check if this is the target class
-                if target_class in class_name or class_name in target_class:
-                    # Get bounding box coordinates
-                    x1, y1, x2, y2 = map(int, box.xyxy[0].cpu().numpy())
-                    
-                    # Check color match
-                    color_match_ratio = self._check_color_match(frame, (x1, y1, x2, y2), target_color)
-                    
-                    # Object must match color threshold
-                    if color_match_ratio >= config.HOME_MARKER_COLOR_THRESHOLD:
-                        # Combined score: confidence weighted by color match
-                        combined_score = confidence * color_match_ratio
-                        
-                        if combined_score > best_score:
-                            best_score = combined_score
-                            width = x2 - x1
-                            height = y2 - y1
-                            center_x = (x1 + x2) // 2
-                            center_y = (y1 + y2) // 2
-                            area = width * height
-                            
-                            best_detection = {
-                                'detected': True,
-                                'center_x': center_x,
-                                'center_y': center_y,
-                                'width': width,
-                                'height': height,
-                                'area': area,
-                                'confidence': confidence,
-                                'color_match': color_match_ratio,
-                                'class_name': class_name
-                            }
-            
-            if best_detection:
-                return best_detection
-            else:
-                return {'detected': False, 'center_x': None, 'center_y': None, 'width': None, 'area': None, 'confidence': None, 'color_match': None}
-                
-        except Exception as e:
-            log_error(self.logger, e, "Error in home marker detection")
-            return {'detected': False, 'center_x': None, 'center_y': None, 'width': None, 'area': None, 'confidence': None, 'color_match': None}
-    
     def handle_home_state(self):
         """Handle HOME state - simplified: turn 180°, find red square, drive to it"""
         # Step 1: Turn 180 degrees (only once when entering this state)
@@ -713,13 +544,19 @@ class BinDieselSystem:
             time.sleep(config.TURN_180_DURATION)  # Turn for specified duration
             self.servo.center()  # Center steering
             self.return_turn_complete = True
-            log_info(self.logger, f"Turn complete, scanning for home marker (object: {config.HOME_MARKER_OBJECT_CLASS})...")
+            log_info(self.logger, "Turn complete, scanning for red box...")
             return  # Exit early to allow turn to complete
         
-        # Step 2: Scan for home marker using YOLO object detection
+        # Step 2: Scan for home marker using YOLO object detection + OpenCV color tracking (hardcoded for red box)
         try:
             frame = self.visual.get_frame()
-            marker = self._detect_home_marker(frame)
+            # Use home_marker_detector module (hardcoded for red box)
+            marker = detect_red_box(
+                self.home_marker_model,
+                frame,
+                confidence_threshold=config.HOME_MARKER_CONFIDENCE,
+                color_threshold=config.HOME_MARKER_COLOR_THRESHOLD
+            )
             
             if marker['detected']:
                 # Found home marker!
