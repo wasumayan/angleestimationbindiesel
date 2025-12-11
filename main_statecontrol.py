@@ -485,8 +485,7 @@ class BinDieselSystem:
             while self.running:
                 # SAFETY: Check TOF sensor FIRST before any other processing
                 # This ensures immediate emergency stop response
-                if self.tof and self.tof.detect():
-                    # Emergency stop triggered by TOF
+                if self.tof and self.tof.detect() and state != State.IDLE and state != State.STOPPED:                    # Emergency stop triggered by TOF
                     log_info(self.logger, "=" * 70)
                     log_info(self.logger, "EMERGENCY STOP: TOF sensor triggered!")
                     log_info(self.logger, "=" * 70)
@@ -521,8 +520,6 @@ class BinDieselSystem:
                 elif state == State.HOME:
                     self.handle_home_state()
                 
-                elif state == State.RETURNING_TO_START:  # Legacy - redirects to HOME
-                    self.handle_home_state()
 
                 # Log performance stats periodically (every 5 seconds)
                 if self.frame_count % 500 == 0:  # ~10 FPS * 50 = 5 seconds
