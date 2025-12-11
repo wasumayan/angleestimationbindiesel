@@ -157,6 +157,9 @@ class BinDieselSystem:
         # Control flags (running already set at start of __init__)
         self.last_visual_update = 0
         self.visual_update_interval = config.VISUAL_UPDATE_INTERVAL  # Use configurable update interval
+        
+        # Tracking state - store target track_id to ensure we follow the same person
+        self.target_track_id = None  # Track ID of the person we're following
 
                 # Initialize control flags early to prevent AttributeError
         self.running = True
@@ -353,7 +356,8 @@ class BinDieselSystem:
                     (current_time - self.cached_visual_timestamp) < 0.1):
                     result = self.cached_visual_result
                 else:
-                    result = self.visual.update()
+                    # In ACTIVE state, no target_track_id yet - will prioritize person with arm raised
+                    result = self.visual.update(target_track_id=None)
                     self.cached_visual_result = result
                     self.cached_visual_timestamp = current_time
                 
@@ -387,7 +391,8 @@ class BinDieselSystem:
             (current_time - self.cached_visual_timestamp) < 0.1):
             result = self.cached_visual_result
         elif should_update:
-            result = self.visual.update()
+            # Pass target_track_id to ensure we only follow the specific person
+            result = self.visual.update(target_track_id=self.target_track_id)
             self.cached_visual_result = result
             self.cached_visual_timestamp = current_time
         else:
@@ -412,11 +417,13 @@ class BinDieselSystem:
         
         if result['arm_raised']:
             # User has arm raised - start following
-            log_info(self.logger, f"Arm raised detected! Track ID: {result.get('track_id', 'N/A')}, "
+            # Store the track_id to ensure we follow this specific person
+            self.target_track_id = result.get('track_id')
+            log_info(self.logger, f"Arm raised detected! Track ID: {self.target_track_id}, "
                                  f"Angle: {result.get('angle', 'N/A'):.1f}°")
             self._transition_to(State.FOLLOWING_USER)
             conditional_log(self.logger, 'info',
-                          "User tracking confirmed, starting to follow",
+                          f"User tracking confirmed (Track ID: {self.target_track_id}), starting to follow",
                           config.DEBUG_MODE)
     
     def handle_following_user_state(self):
@@ -433,7 +440,8 @@ class BinDieselSystem:
             (current_time - self.cached_visual_timestamp) < 0.1):
             result = self.cached_visual_result
         elif should_update:
-            result = self.visual.update()
+            # Pass target_track_id to ensure we only follow the specific person
+            result = self.visual.update(target_track_id=self.target_track_id)
             self.cached_visual_result = result
             self.cached_visual_timestamp = current_time
         else:
@@ -446,13 +454,25 @@ class BinDieselSystem:
                 'track_id': None
             }
         
+        # Check if we're still tracking the same person (by track_id)
+        if self.target_track_id is not None:
+            # Only follow if the detected person matches our target track_id
+            if result.get('track_id') != self.target_track_id:
+                # Different person detected - treat as person lost
+                conditional_log(self.logger, 'info',
+                              f"Target person (Track ID: {self.target_track_id}) not found, "
+                              f"detected person has Track ID: {result.get('track_id', 'N/A')}",
+                              config.DEBUG_MODE)
+                result['person_detected'] = False  # Treat as person lost
+        
         if not result['person_detected']:
             # User lost - stop car and revert to tracking state to search for user
             conditional_log(self.logger, 'info',
-                          "User lost during following, stopping and searching...",
+                          f"User lost during following (Track ID: {self.target_track_id}), stopping and searching...",
                           config.DEBUG_MODE)
             self.motor.stop()
             self.servo.center()
+            self.target_track_id = None  # Clear target track_id
             # Revert to TRACKING_USER state to search for user again
             self._transition_to(State.TRACKING_USER)
             return

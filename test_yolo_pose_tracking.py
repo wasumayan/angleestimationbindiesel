@@ -51,6 +51,7 @@ class YOLOPoseTracker:
         self.width = width
         self.height = height
         self.confidence = confidence
+        self.tracker = tracker  # Store tracker config (e.g., 'bytetrack.yaml')
         self.frame_center_x = width // 2
         self.debug_mode = config.DEBUG_MODE
         self._frame_counter = 0; 
@@ -366,7 +367,7 @@ class YOLOPoseTracker:
             conf=0.01,  # Very low confidence (0.01) to detect everything - removed confidence boundary
             verbose=False,
             persist=True,  # Maintain tracking across frames
-            tracker='bytetrack.yaml',  # Fast tracker (or 'botsort.yaml' for better accuracy)
+            tracker=self.tracker,  # Use stored tracker config (e.g., 'bytetrack.yaml' or 'botsort.yaml')
             show=False,  # Don't show results automatically
             half=False,  # Set to True if using GPU (faster but less accurate)
             imgsz=config.YOLO_INFERENCE_SIZE,  # Match camera resolution (640) to avoid resize overhead
@@ -477,10 +478,14 @@ class YOLOPoseTracker:
         
         return results, yolo_result
     
-    def update(self):
+    def update(self, target_track_id=None):
         """
         Compatibility wrapper for VisualDetector interface
         Returns same format as VisualDetector.update() for easy integration
+        
+        Args:
+            target_track_id: Optional track_id to filter for specific person.
+                           If None, prioritizes person with arm raised.
         
         Returns:
             dict with detection results:
@@ -499,13 +504,7 @@ class YOLOPoseTracker:
         frame = self.get_frame()
         results, _ = self.detect(frame)  # Ignore yolo_result for update() method
         
-        # Find the best person (first person with pose data, or first person)
-        best_person = None
-        for pose in results['poses']:
-            best_person = pose
-            break
-        
-        if best_person is None:
+        if not results['poses']:
             # No person detected
             return {
                 'person_detected': False,
@@ -517,9 +516,54 @@ class YOLOPoseTracker:
                 'track_id': None
             }
         
-        # Extract data from pose
+        # Filter by target_track_id if specified
+        if target_track_id is not None:
+            for pose in results['poses']:
+                if pose.get('track_id') == target_track_id:
+                    # Found target person
+                    arm_raised = pose.get('left_arm_raised', False) or pose.get('right_arm_raised', False)
+                    arm_confidence = 1.0 if arm_raised else 0.0
+                    return {
+                        'person_detected': True,
+                        'person_box': pose['box'],
+                        'angle': pose.get('angle'),
+                        'is_centered': pose.get('is_centered', False),
+                        'arm_raised': arm_raised,
+                        'arm_confidence': arm_confidence,
+                        'track_id': pose.get('track_id')
+                    }
+            # Target person not found
+            return {
+                'person_detected': False,
+                'person_box': None,
+                'angle': None,
+                'is_centered': False,
+                'arm_raised': False,
+                'arm_confidence': 0.0,
+                'track_id': None
+            }
+        
+        # No target specified: prioritize person with arm raised
+        # First, try to find someone with arm raised
+        for pose in results['poses']:
+            arm_raised = pose.get('left_arm_raised', False) or pose.get('right_arm_raised', False)
+            if arm_raised:
+                # Found person with arm raised - this is our target
+                arm_confidence = 1.0
+                return {
+                    'person_detected': True,
+                    'person_box': pose['box'],
+                    'angle': pose.get('angle'),
+                    'is_centered': pose.get('is_centered', False),
+                    'arm_raised': True,
+                    'arm_confidence': arm_confidence,
+                    'track_id': pose.get('track_id')
+                }
+        
+        # No one with arm raised: return first person (for tracking state)
+        best_person = results['poses'][0]
         arm_raised = best_person.get('left_arm_raised', False) or best_person.get('right_arm_raised', False)
-        arm_confidence = 1.0 if arm_raised else 0.0  # Simplified confidence
+        arm_confidence = 1.0 if arm_raised else 0.0
         
         return {
             'person_detected': True,
