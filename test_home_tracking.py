@@ -292,16 +292,17 @@ class HomeMarkerTracker:
         # Determine speed based on centering and distance
         if abs(offset) < self.center_tolerance:
             # Marker is centered - move faster
-            speed = self.fast_speed
-            speed_str = "FAST"
-        else:
-            # Marker off-center - move slower
             speed = self.medium_speed
             speed_str = "MEDIUM"
+        else:
+            # Marker off-center - move slower
+            speed = self.slow_speed
+            speed_str = "SLOW"
         
         # Move forward if motor enabled
         if self.motor_enabled and self.motor:
             self.motor.forward(speed)
+            log_info(self.logger, f"STEERING: {steering_angle:.1f}°, SPEED: {speed_str}")
         
         # Build detection dict for consistency
         detection = {
@@ -407,6 +408,7 @@ class HomeMarkerTracker:
         try:
             while True:
                 frame_start = time.time()
+                refresh_time = 1000  # 1 seconds
                 
                 # Get frame
                 frame_rgb = self.get_frame()
@@ -419,6 +421,10 @@ class HomeMarkerTracker:
                 elif self.is_locked:
                     detection = self.handle_lock_mode(frame_bgr)
                     mode_str = "LOCK (tracking)"
+                    if time.time() - frame_start < refresh_time:
+                        # Refresh lock mode to avoid stuck frames
+                        self.is_scanning = True
+                        self.is_locked = False
                 elif self.is_stopped:
                     detection = self.last_detection
                     mode_str = "STOPPED"
