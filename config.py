@@ -23,7 +23,7 @@ PWM_FREQUENCY_MOTOR = 40  #Hz
 PWM_FREQUENCY = 40  # Alias for motor frequency
 
 MOTOR_STOP = 100.0      # 0% duty cycle = stopped
-MOTOR_MAX = 93.00       # 100% duty cycle = maximum speed 93.7 
+MOTOR_MAX = 92.70       # 100% duty cycle = maximum speed 93.7 
 
 # Motor Speed Configuration
 FOLLOW_SPEED = 1.0  # Speed when following user (0.0-1.0)
@@ -107,7 +107,7 @@ HOME_MARKER_CONFIDENCE = 0.3  # Minimum confidence for home marker detection
 HOME_MARKER_COLOR_THRESHOLD = 0.3  # Minimum percentage of object that must match color (0.0-1.0)
 HOME_MARKER_STOP_DISTANCE = 100  # Stop when marker is this many pixels wide (closer = larger)
 HOME_MARKER_SLOW_DISTANCE = 50
-TURN_180_DURATION = 6.5  # Seconds to turn 180 degrees
+TURN_180_DURATION = 6.2  # Seconds to turn 180 degrees
 
 # Performance Configuration
 ENABLE_FRAME_CACHING = True  # Cache frames to reduce redundant captures
