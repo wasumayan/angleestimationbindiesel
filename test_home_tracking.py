@@ -41,6 +41,23 @@ except ImportError as e:
     sys.exit(1)
 
 
+def create_tracker():
+    """Create MOSSE tracker, handling different OpenCV versions"""
+    try:
+        # Try newer OpenCV versions (cv2.legacy module)
+        return cv2.legacy.TrackerMOSSE_create()
+    except AttributeError:
+        try:
+            # Fall back to older OpenCV versions
+            return cv2.TrackerMOSSE_create()
+        except AttributeError:
+            # Fall back to CSRT if MOSSE not available
+            try:
+                return cv2.legacy.TrackerCSRT_create()
+            except AttributeError:
+                return cv2.TrackerCSRT_create()
+
+
 class HomeMarkerTracker:
     """Tracks red square home marker with servo/motor integration""" 
     def __init__(self, use_camera=True, use_servo=True, use_motor=True):
@@ -159,7 +176,7 @@ class HomeMarkerTracker:
         self.slow_speed = config.MOTOR_SLOW
         self.medium_speed = config.MOTOR_MEDIUM
         self.fast_speed = config.MOTOR_FAST
-        
+
 ###############################################################################################################################################    
     def get_frame(self):
         """Get next frame from camera or dummy source"""
@@ -202,8 +219,8 @@ class HomeMarkerTracker:
             y1 = marker['center_y'] - marker['height'] // 2
             bbox = (x1, y1, marker['width'], marker['height'])
             
-            # Initialize MOSSE tracker (very fast)
-            self.tracker = cv2.TrackerMOSSE_create()
+            # Initialize MOSSE tracker (very fast) - handles different OpenCV versions
+            self.tracker = create_tracker()
             ok = self.tracker.init(frame_bgr, bbox)
             
             if ok:
