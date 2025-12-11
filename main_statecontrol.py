@@ -75,15 +75,12 @@ class BinDieselSystem:
                 right_max_duty=config.SERVO_RIGHT_MAX
             )
             self.servo.center()
-            time.sleep(0.1)
+            time.sleep(1.0)
             self.servo.set_angle(-30)
-            time.sleep(0.1)
+            time.sleep(1.0)
             self.servo.center()
-            time.sleep(0.1)
-            self.servo.set_angle(30)
-            time.sleep(0.1)
-            self.servo.center()
-            time.sleep(0.1)
+            time.sleep(1.0)
+
             log_info(self.logger, "Servo controller initialized successfully")
         except Exception as e:
             log_error(self.logger, e, "Failed to initialize servo controller")
