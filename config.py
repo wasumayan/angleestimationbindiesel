@@ -33,7 +33,7 @@ MOTOR_FAST = 1.0  # Fast speed
 # Servo Control Values (PWM duty cycle percentages)
 PWM_FREQUENCY_SERVO = 50 #HZ
 
-SERVO_CENTER = 93.000
+SERVO_CENTER = 92.700
 SERVO_LEFT_MAX = 95.422 
 SERVO_RIGHT_MAX = 89.318 
 
