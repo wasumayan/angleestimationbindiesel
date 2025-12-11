@@ -102,95 +102,58 @@ class CentroidTracker:
 
 
 class HomeMarkerTracker:
-    """Tracks red square home marker with servo/motor integration""" 
+    """Tracks red square home marker with servo/motor integration"""
+    
     def __init__(self, use_camera=True, use_servo=True, use_motor=True):
-        """
-        Initialize tracker.
-        
-        Args:
-            use_camera: Use camera (True) or read from video file (False)
-            use_servo: Initialize servo controller
-            use_motor: Initialize motor controller
-        """
         self.logger = setup_logger(__name__)
         self.use_camera = use_camera
-        self.use_servo = use_servo
-        self.use_motor = use_motor
         
-        # Initialize YOLO model
-        log_info(self.logger, "Initializing YOLO model...")
-        self.yolo_model = YOLO(config.YOLO_MODEL)
-        
+        # Load YOLO model
         try:
             self.yolo_model = YOLO(config.YOLO_MODEL)
-            log_info(self.logger, f"YOLO model loaded: {config.YOLO_MODEL}")
-        except Exception as e1:
-            # Fallback: if NCNN failed, try PyTorch
+            log_info(self.logger, f"YOLO: {config.YOLO_MODEL}")
+        except Exception as e:
             if config.USE_NCNN and str(config.YOLO_MODEL).endswith('_ncnn_model'):
-                fallback_path = str(config.YOLO_MODEL).replace('_ncnn_model', '.pt')
-                log_info(self.logger, f"NCNN model not found, trying PyTorch: {fallback_path}")
-                self.yolo_model = YOLO(fallback_path)
-                log_info(self.logger, f"PyTorch model loaded: {fallback_path}")
+                fallback = str(config.YOLO_MODEL).replace('_ncnn_model', '.pt')
+                self.yolo_model = YOLO(fallback)
+                log_info(self.logger, f"YOLO fallback: {fallback}")
             else:
-                raise RuntimeError(f"Failed to load YOLO model: {e1}") from e1
+                raise
         
-        # Initialize camera/video
-        if self.use_camera:
-            try:
-                from picamera2 import Picamera2
-                log_info(self.logger, "Initializing Picamera2...")
-                self.picam2 = Picamera2()
-                preview_config = self.picam2.create_preview_configuration(
-                    main={"size": (config.CAMERA_WIDTH, config.CAMERA_HEIGHT), "format": "RGB888"},
-                    controls={"FrameRate": config.CAMERA_FPS}
-                )
-                self.picam2.configure(preview_config)
-                self.picam2.start()
-                time.sleep(1.5)
-                log_info(self.logger, f"Camera started: {config.CAMERA_WIDTH}x{config.CAMERA_HEIGHT}")
-                self.video_source = None
-            except Exception as e:
-                log_error(self.logger, e, "Failed to initialize camera")
-                sys.exit(1)
+        # Camera
+        if use_camera:
+            from picamera2 import Picamera2
+            self.picam2 = Picamera2()
+            config_obj = self.picam2.create_preview_configuration(
+                main={"size": (config.CAMERA_WIDTH, config.CAMERA_HEIGHT), "format": "RGB888"},
+                controls={"FrameRate": config.CAMERA_FPS}
+            )
+            self.picam2.configure(config_obj)
+            self.picam2.start()
+            time.sleep(1.5)
         else:
-            log_info(self.logger, "Using dummy frame source (no camera)")
             self.picam2 = None
-            self.video_source = None
         
-        # Initialize servo
-        if self.use_servo:
-            log_info(self.logger, "Initializing servo controller...")
-            try:
-                self.servo = ServoController(
-                    pwm_pin=config.SERVO_PWM_PIN,
-                    frequency=config.PWM_FREQUENCY,
-                    center_duty=config.SERVO_CENTER,
-                    left_max_duty=config.SERVO_LEFT_MAX,
-                    right_max_duty=config.SERVO_RIGHT_MAX
-                )
-                self.servo.center()
-                log_info(self.logger, "Servo initialized and centered")
-            except Exception as e:
-                log_warning(self.logger, f"Failed to initialize servo: {e}", "Servo disabled")
-                self.servo = None
-        else:
-            self.servo = None
+        # Servo
+        self.servo = ServoController(
+            pwm_pin=config.SERVO_PWM_PIN,
+            frequency=config.PWM_FREQUENCY,
+            center_duty=config.SERVO_CENTER,
+            left_max_duty=config.SERVO_LEFT_MAX,
+            right_max_duty=config.SERVO_RIGHT_MAX
+        ) if use_servo else None
         
-        # Initialize motor
-        if self.use_motor:
-            log_info(self.logger, "Initializing motor controller...")
-            try:
-                self.motor = MotorController(
-                    pwm_pin=config.MOTOR_PWM_PIN,
-                    frequency=config.PWM_FREQUENCY
-                )
-                self.motor.stop()
-                log_info(self.logger, "Motor initialized and stopped")
-            except Exception as e:
-                log_warning(self.logger, f"Failed to initialize motor: {e}", "Motor disabled")
-                self.motor = None
-        else:
-            self.motor = None
+        if self.servo:
+            self.servo.center()
+        
+        # Motor
+        self.motor = MotorController(
+            pwm_pin=config.MOTOR_PWM_PIN,
+            frequency=config.PWM_FREQUENCY
+        ) if use_motor else None
+        
+        if self.motor:
+            self.motor.stop()
         
         # Tracking state
         self.is_scanning = True
@@ -200,7 +163,6 @@ class HomeMarkerTracker:
         self.lost_count = 0
         self.lost_threshold = 5
         
-        # Custom tracker needs reference to YOLO model for re-detection
         CentroidTracker.yolo_model = self.yolo_model
         
         # Performance tracking
@@ -210,15 +172,12 @@ class HomeMarkerTracker:
         self.show_fps = False
         self.motor_enabled = True
         
-        # Detection parameters (loosened for reliability)
-        self.confidence_threshold = 0.25  # Lowered from 0.35 for better detection
-        self.color_threshold = 0.25  # Lowered from 0.40 for tolerance to lighting
-        self.square_tolerance = 0.35  # Increased from 0.25 (more shape tolerance)
+        # Detection parameters
+        self.confidence_threshold = 0.25
+        self.color_threshold = 0.25
+        self.square_tolerance = 0.35
         self.stop_distance = config.HOME_MARKER_STOP_DISTANCE
-        self.center_tolerance = config.CAMERA_WIDTH * 0.05  # 5% of width
-        
-        # Diagnostic counter
-        self.frame_diagnostics = deque(maxlen=5)  # Keep last 5 detection attempts
+        self.center_tolerance = config.CAMERA_WIDTH * 0.05
         
         # Servo/Motor parameters
         self.steering_gain = config.ANGLE_TO_STEERING_GAIN
@@ -226,7 +185,6 @@ class HomeMarkerTracker:
         self.medium_speed = config.MOTOR_MEDIUM
         self.fast_speed = config.MOTOR_FAST
 
-###############################################################################################################################################    
     def get_frame(self):
         """Get next frame from camera or dummy source"""
         if self.use_camera and self.picam2:
@@ -246,14 +204,12 @@ class HomeMarkerTracker:
             if config.CAMERA_FLIP_VERTICAL:
                 frame = cv2.flip(frame, 0)
             
-            return frame  # RGB format
+            return frame
         else:
-            # Dummy frame: dark gray
             return np.zeros((config.CAMERA_HEIGHT, config.CAMERA_WIDTH, 3), dtype=np.uint8) + 50
-###############################################################################################################################################    
+
     def handle_scan_mode(self, frame_bgr):
         """Scan for home marker (no lock yet)"""
-        # Run full-frame YOLO detection to find marker
         marker = detect_red_box(
             self.yolo_model,
             frame_bgr,
@@ -262,22 +218,11 @@ class HomeMarkerTracker:
             square_aspect_ratio_tolerance=self.square_tolerance
         )
         
-        # Log diagnostic info for debugging
-        if self.frame_count % 30 == 0:  # Log every ~1 second at ~30 FPS
-            if marker['detected']:
-                diag_msg = f"[SCAN] Detected: conf={marker['confidence']:.2f}, color={marker['color_match']:.1%}, aspect={marker['aspect_ratio']:.2f}, size={marker['width']}x{marker['height']}"
-                conditional_log(self.logger, 'info', diag_msg, True)
-            else:
-                diag_msg = f"[SCAN] No detection (thresholds: conf>{self.confidence_threshold:.2f}, color>{self.color_threshold:.1%}, aspect_tol±{self.square_tolerance:.1%})"
-                conditional_log(self.logger, 'info', diag_msg, self.debug_mode)
-        
         if marker['detected']:
-            # Marker found! Initialize centroid tracker and lock on
             x1 = marker['center_x'] - marker['width'] // 2
             y1 = marker['center_y'] - marker['height'] // 2
             bbox = (x1, y1, marker['width'], marker['height'])
             
-            # Initialize centroid tracker (works on all platforms)
             self.tracker = CentroidTracker(max_distance=150, max_lost_frames=10)
             ok = self.tracker.init(frame_bgr, bbox)
             
@@ -286,20 +231,15 @@ class HomeMarkerTracker:
                 self.is_scanning = False
                 self.last_detection = marker
                 self.lost_count = 0
-                log_info(self.logger, f"Marker LOCKED! Bbox: {bbox}, Confidence: {marker['confidence']:.2f}, Color: {marker['color_match']:.1%}")
+                log_info(self.logger, f"LOCKED: conf={marker['confidence']:.2f}, color={marker['color_match']:.1%}")
                 return marker
-            else:
-                log_warning(self.logger, "Tracker initialization failed", "Continuing scan")
-                return None
         else:
-            # No marker found - perform search sweep
             if self.servo:
-                self.servo.turn_left(0.3)  # Small left turn while scanning
+                self.servo.turn_left(0.3)
             if self.motor:
                 self.motor.forward(self.slow_speed)
-            return None
-        
-###############################################################################################################################################
+        return None
+
     def handle_lock_mode(self, frame_bgr):
         """Track locked marker with servo/motor steering"""
         if not self.tracker:
@@ -381,9 +321,7 @@ class HomeMarkerTracker:
             self.tracker = None
         
         return detection
-    
-    ###############################################################################################################################################
-    
+
     def draw_ui(self, frame, detection, mode_str):
         """Draw UI overlay on frame"""
         annotated = frame.copy()
@@ -443,17 +381,13 @@ class HomeMarkerTracker:
         
         return annotated
     
-    ###############################################################################################################################################
     def run(self):
         """Main test loop"""
-        log_info(self.logger, "=" * 70)
+        log_info(self.logger, "="*50)
         log_info(self.logger, "Home Marker Tracker Test")
-        log_info(self.logger, "=" * 70)
-        log_info(self.logger, f"YOLO Model: {config.YOLO_MODEL}")
-        log_info(self.logger, f"Camera: {config.CAMERA_WIDTH}x{config.CAMERA_HEIGHT}")
-        log_info(self.logger, f"Servo: {'Enabled' if self.servo else 'Disabled'}")
-        log_info(self.logger, f"Motor: {'Enabled' if self.motor else 'Disabled'}")
-        log_info(self.logger, "=" * 70)
+        log_info(self.logger, f"YOLO: {config.YOLO_MODEL} | Camera: {config.CAMERA_WIDTH}x{config.CAMERA_HEIGHT}")
+        log_info(self.logger, f"Servo: {bool(self.servo)} | Motor: {bool(self.motor)}")
+        log_info(self.logger, "="*50)
         
         try:
             while True:
