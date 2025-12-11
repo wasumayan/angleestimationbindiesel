@@ -433,23 +433,7 @@ class HomeMarkerTracker:
    
         try:
             while True:
-                # Check TOF emergency stop
-
-                try:
-                    if tof_sensor.detect():
-                        log_warning(self.logger, "TOF EMERGENCY STOP triggered", "run()")
-                        self.motor.stop()
-                        self.safe_center_servo()
-
-                        self.is_scanning = False
-                        self.is_locked = False
-                        self.is_stopped = True
-                        self.tracker = None
-                        self.approach_flag = False
-                        continue
-                except Exception as e:
-                    log_warning(self.logger, f"TOF check error: {e}", "run()")
-                
+              
                 # Get frame
                 frame_rgb = self.get_frame()
                 frame_bgr = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)

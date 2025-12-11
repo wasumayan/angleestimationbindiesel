@@ -23,12 +23,12 @@ PWM_FREQUENCY_MOTOR = 40  #Hz
 PWM_FREQUENCY = 40  # Alias for motor frequency
 
 MOTOR_STOP = 100.0      # 0% duty cycle = stopped
-MOTOR_MAX = 92.7        # 100% duty cycle = maximum speed
+MOTOR_MAX = 93.7        # 100% duty cycle = maximum speed
 
 # Servo Control Values (PWM duty cycle percentages)
 PWM_FREQUENCY_SERVO = 50 #HZ
 
-SERVO_CENTER = 92.600  
+SERVO_CENTER = 92.000
 SERVO_LEFT_MAX = 95.422 
 SERVO_RIGHT_MAX = 89.318 
 
