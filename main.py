@@ -544,18 +544,19 @@ class BinDieselSystem:
             time.sleep(config.TURN_180_DURATION)  # Turn for specified duration
             self.servo.center()  # Center steering
             self.return_turn_complete = True
-            log_info(self.logger, "Turn complete, scanning for red box...")
+            log_info(self.logger, "Turn complete, scanning for red square object...")
             return  # Exit early to allow turn to complete
         
-        # Step 2: Scan for home marker using YOLO object detection + OpenCV color tracking (hardcoded for red box)
+        # Step 2: Scan for home marker using YOLO object detection + OpenCV color tracking (hardcoded for red square)
         try:
             frame = self.visual.get_frame()
-            # Use home_marker_detector module (hardcoded for red box)
+            # Use home_marker_detector module (hardcoded for red square)
             marker = detect_red_box(
                 self.home_marker_model,
                 frame,
                 confidence_threshold=config.HOME_MARKER_CONFIDENCE,
-                color_threshold=config.HOME_MARKER_COLOR_THRESHOLD
+                color_threshold=config.HOME_MARKER_COLOR_THRESHOLD,
+                square_aspect_ratio_tolerance=0.3  # 30% tolerance for square shape
             )
             
             if marker['detected']:
@@ -566,10 +567,10 @@ class BinDieselSystem:
                 marker_width = marker['width']
                 
                 color_match = marker.get('color_match', 0.0)
-                class_name = marker.get('class_name', 'unknown')
+                aspect_ratio = marker.get('aspect_ratio', 0.0)
                 confidence = marker.get('confidence', 0.0)
                 conditional_log(self.logger, 'info',
-                              f"Home marker detected! Class: {class_name}, Confidence: {confidence:.2f}, Color match: {color_match:.1%}, Center: {center_x}, Width: {marker_width}px",
+                              f"Red square detected! Confidence: {confidence:.2f}, Color match: {color_match:.1%}, Aspect ratio: {aspect_ratio:.2f}, Center: {center_x}, Width: {marker_width}px",
                               self.debug_mode)
                 
                 # Check if close enough to stop
