@@ -75,6 +75,15 @@ class BinDieselSystem:
                 right_max_duty=config.SERVO_RIGHT_MAX
             )
             self.servo.center()
+            time.sleep(0.1)
+            self.servo.set_angle(-30)
+            time.sleep(0.1)
+            self.servo.center()
+            time.sleep(0.1)
+            self.servo.set_angle(30)
+            time.sleep(0.1)
+            self.servo.center()
+            time.sleep(0.1)
             log_info(self.logger, "Servo controller initialized successfully")
         except Exception as e:
             log_error(self.logger, e, "Failed to initialize servo controller")
@@ -152,8 +161,8 @@ class BinDieselSystem:
         
         # PID steering control (to handle servo latency)
         self.pid_kp = 0.8   # Proportional gain
-        self.pid_ki = 0.0   # Integral gain
-        self.pid_kd = 0.0   # Derivative gain
+        self.pid_ki = 0.1   # Integral gain
+        self.pid_kd = 0.3   # Derivative gain
         self.pid_error_integral = 0.0  # Accumulated error over time
         self.pid_last_error = None  # Previous error for derivative calculation (None = first frame, skip derivative)
         
