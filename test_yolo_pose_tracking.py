@@ -31,7 +31,7 @@ class YOLOPoseTracker:
     """
     
     def __init__(self, 
-                 model_path='yolo11n-pose.pt',  # Pose model (nano for speed)
+                 model_path=config.YOLO_POSE_MODEL,  # Pose model (uses config, supports NCNN)
                  width=640, 
                  height=480, 
                  confidence=0.25,
@@ -591,8 +591,8 @@ def draw_detections(frame, yolo_result, results):
 
 def main():
     parser = argparse.ArgumentParser(description='Test YOLO pose detection + tracking')
-    parser.add_argument('--model', type=str, default='yolo11n-pose.pt', 
-                       help='YOLO pose model (yolo11n-pose.pt, yolo11s-pose.pt, etc.)')
+    parser.add_argument('--model', type=str, default=config.YOLO_POSE_MODEL, 
+                       help=f'YOLO pose model path (default: {config.YOLO_POSE_MODEL})')
     parser.add_argument('--conf', type=float, default=0.01, help='Confidence threshold (default: 0.01 for maximum detection - confidence boundaries removed)')
     parser.add_argument('--fps', action='store_true', help='Show FPS counter')
     parser.add_argument('--debug', action='store_true', help='Enable verbose debug output for arm detection')
