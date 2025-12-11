@@ -61,7 +61,7 @@ class CentroidTracker:
             self.yolo_model,
             frame,
             confidence_threshold=0.20,  # Lowered for lock mode reliability
-            color_threshold=0.18,       # Slightly loosened for lock mode
+            color_threshold=0.15,       # Slightly loosened for lock mode (15% match)
             square_aspect_ratio_tolerance=0.55  # Moderate tolerance for shapes
         )
         
@@ -162,7 +162,7 @@ class HomeMarkerTracker:
         
         # Detection parameters (balanced for shadowed red cube)
         self.confidence_threshold = 0.25
-        self.color_threshold = 0.20  # Slightly loosened from 0.25
+        self.color_threshold = 0.18  # Matches actual real-world color match ~22%
         self.square_tolerance = 0.55  # Moderate tolerance for cube shapes
         self.stop_distance = config.HOME_MARKER_STOP_DISTANCE
         self.slow_threshold = config.HOME_MARKER_SLOW_DISTANCE

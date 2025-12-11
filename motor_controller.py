@@ -30,12 +30,16 @@ class MotorController:
 
     def forward(self, speed: float):       # speed in percentage of total 0-1.0
         duty = config.MOTOR_MAX * speed
+        
+        # Clamp PWM between 90-100 to prevent inverter from activating reverse
+        # when PWM drops below threshold (due to rounding, init, or shutdown)
+        duty = max(90.0, min(100.0, duty))
 
         if config.USE_GPIO:
             self.pwm.ChangeDutyCycle(duty)
 
         if config.DEBUG_MOTOR:
-            print(f"[Motor] forward speed = {speed:.2f} (duty = {duty:.1f}%)")
+            print(f"[Motor] forward speed = {speed:.2f} (duty = {duty:.1f}% clamped)")
 
     def stop(self):
         if config.USE_GPIO and self.pwm:
