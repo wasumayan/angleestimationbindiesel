@@ -18,8 +18,50 @@ def main():
     )
 
     # Test center position
+
+       
+    print("\nDrive forward")
+    motor.forward(1.1)
+    time.sleep(3.0)
+    
     print("\nDrive forward")
     motor.forward(1.0)
+    time.sleep(3.0)
+
+    print("\nDrive forward")
+    motor.forward(0.9)
+    time.sleep(3.0)
+
+    print("\nDrive forward")
+    motor.forward(0.8)
+    time.sleep(3.0)
+
+    print("\nDrive forward")
+    motor.forward(0.7)
+    time.sleep(3.0)
+
+    print("\nDrive forward")
+    motor.forward(0.6)
+    time.sleep(3.0)
+
+    print("\nDrive forward")
+    motor.forward(0.5)
+    time.sleep(3.0)
+
+    print("\nDrive forward")
+    motor.forward(0.4)
+    time.sleep(3.0)
+
+    print("\nDrive forward")
+    motor.forward(0.3)
+    time.sleep(3.0)
+
+    print("\nDrive forward")
+    motor.forward(0.2)
+    time.sleep(3.0)
+
+    print("\nDrive forward")
+    motor.forward(0.1)
     time.sleep(3.0)
 
         # Back to center again
