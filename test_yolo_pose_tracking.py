@@ -121,17 +121,18 @@ class YOLOPoseTracker:
             
             print(f"[YOLOPoseTracker] Camera started: {width}x{height}")
         except Exception as e:
-            # Clean up on error
-            if self.picam2:
+            # Clean up on error - ensure picam2 attribute exists before checking
+            picam2_instance = getattr(self, 'picam2', None)
+            if picam2_instance is not None:
                 try:
-                    self.picam2.stop()
+                    picam2_instance.stop()
                 except:
                     pass
                 try:
-                    self.picam2.close()
+                    picam2_instance.close()
                 except:
                     pass
-                self.picam2 = None
+            self.picam2 = None
             raise RuntimeError(f"Failed to initialize camera: {e}")
         
         # Tracking state
@@ -146,6 +147,10 @@ class YOLOPoseTracker:
         Returns:
             Frame in RGB format
         """
+        # Check if picam2 exists and is initialized
+        if not hasattr(self, 'picam2') or self.picam2 is None:
+            raise RuntimeError("Camera not initialized. Cannot get frame.")
+        
         # Use wait=True to ensure allocator is ready before capture
         array = self.picam2.capture_array(wait=True)  # Returns RGB
         
@@ -577,9 +582,16 @@ class YOLOPoseTracker:
     
     def stop(self):
         """Stop camera and cleanup"""
-        if self.picam2:
-            self.picam2.stop()
-            self.picam2.close()
+        picam2_instance = getattr(self, 'picam2', None)
+        if picam2_instance is not None:
+            try:
+                picam2_instance.stop()
+            except:
+                pass
+            try:
+                picam2_instance.close()
+            except:
+                pass
         print("[YOLOPoseTracker] Stopped")
 
 
