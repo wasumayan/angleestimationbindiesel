@@ -100,6 +100,34 @@ class WakeWordDetector:
     
     def start_listening(self):
         """Start listening for wake word"""
+        # Reinitialize audio if it was terminated
+        if self.audio is None:
+            try:
+                self.audio = pyaudio.PyAudio()
+                print("[WakeWord] Reinitialized PyAudio")
+            except Exception as e:
+                raise RuntimeError(f"Failed to reinitialize PyAudio: {e}")
+        
+        # Reinitialize Porcupine if it was deleted
+        if self.porcupine is None:
+            try:
+                self.porcupine = pvporcupine.create(
+                    access_key=self.access_key,
+                    keyword_paths=[self.model_path]
+                )
+                print("[WakeWord] Reinitialized Porcupine")
+            except Exception as e:
+                raise RuntimeError(f"Failed to reinitialize Porcupine: {e}")
+        
+        # Close existing stream if any
+        if self.stream is not None:
+            try:
+                self.stream.stop_stream()
+                self.stream.close()
+            except Exception:
+                pass
+            self.stream = None
+        
         try:
             self.stream = self.audio.open(
                 rate=self.porcupine.sample_rate,
@@ -161,7 +189,7 @@ class WakeWordDetector:
             return False
     
     def stop(self):
-        """Stop listening and cleanup"""
+        """Stop listening (but keep PyAudio and Porcupine alive for restart)"""
         try:
             if self.stream:
                 try:
@@ -176,6 +204,29 @@ class WakeWordDetector:
         except Exception as e:
             print(f"[WakeWord] Warning: Error stopping stream: {e}")
         
+        # NOTE: Do NOT delete porcupine or terminate audio here
+        # We need to keep them alive so we can restart listening
+        # They will be cleaned up in the final cleanup() method
+        
+        print("[WakeWord] Stopped (ready for restart)")
+    
+    def cleanup(self):
+        """Final cleanup - terminate PyAudio and delete Porcupine"""
+        try:
+            # Stop stream first if still running
+            if self.stream:
+                try:
+                    self.stream.stop_stream()
+                except Exception:
+                    pass
+                try:
+                    self.stream.close()
+                except Exception:
+                    pass
+                self.stream = None
+        except Exception as e:
+            print(f"[WakeWord] Warning: Error stopping stream during cleanup: {e}")
+        
         try:
             if self.porcupine:
                 self.porcupine.delete()
@@ -189,11 +240,10 @@ class WakeWordDetector:
                 self.audio = None
         except Exception as e:
             # PortAudio errors during cleanup are often non-fatal
-            # (e.g., if already terminated or not initialized)
             if 'PortAudio' not in str(e) and 'not initialized' not in str(e).lower():
                 print(f"[WakeWord] Warning: Error terminating PyAudio: {e}")
         
-        print("[WakeWord] Stopped")
+        print("[WakeWord] Cleanup complete")
 
 
 if __name__ == '__main__':

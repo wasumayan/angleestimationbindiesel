@@ -212,6 +212,8 @@ class BinDieselSystem:
     ##############################################################################################################################
     def handle_idle_state(self):
         """Handle IDLE state - wake word only, no voice recognizer (exclusive mic access)"""
+        
+        self.servo.safe_center_servo()
   
         # Ensure wake word detector is running
         if self._wake_word_stopped: 
@@ -614,9 +616,13 @@ class BinDieselSystem:
         # Stop all components (with individual error handling to prevent one failure from stopping cleanup)
         if hasattr(self, 'wake_word'):
             try:
-                self.wake_word.stop()
+                # Use cleanup() for final shutdown, stop() for temporary stop
+                if hasattr(self.wake_word, 'cleanup'):
+                    self.wake_word.cleanup()
+                else:
+                    self.wake_word.stop()
             except Exception as e:
-                log_warning(self.logger, f"Error stopping wake word detector: {e}", "Cleanup")
+                log_warning(self.logger, f"Error cleaning up wake word detector: {e}", "Cleanup")
         
         if hasattr(self, 'visual'):
             try:
