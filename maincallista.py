@@ -452,10 +452,10 @@ class BinDieselSystem:
 
                     self.motor.stop()  # Stop before turning
                     log_info(self.logger, "Stopping BEFORE turning AROUND AFTER REACHING HOME MARKER")
-                    time.sleep(2.0)
+                    time.sleep(1.0)
                     self.servo.turn_left(1.0)  # Max left turn
                     self.motor.forward(config.MOTOR_TURN)
-                    time.sleep(config.TURN_180_DURATION - 0.3)  # Turn for specified duration
+                    time.sleep(config.TURN_180_DURATION - 0.38)  # Turn for specified duration
                     self.servo.center()  # Center steering
                     self.motor.stop()
 
