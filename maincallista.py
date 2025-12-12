@@ -354,7 +354,7 @@ class BinDieselSystem:
             steering_angle = max(-45.0, min(45.0, angle))  # Clamp to servo range
             self.servo.set_angle(steering_angle)
             self.last_error_angle = steering_angle 
-            time.sleep(0.21) ################################################################
+            time.sleep(0.15) ################################################################
             self.servo.center()
             
             # Adjust speed based on how centered user is
@@ -455,7 +455,7 @@ class BinDieselSystem:
                     time.sleep(5.0)
                     self.servo.turn_left(1.0)  # Max left turn
                     self.motor.forward(config.MOTOR_TURN)
-                    time.sleep(config.TURN_180_DURATION - 0.3)  # Turn for specified duration
+                    time.sleep(config.TURN_180_DURATION - 0.2)  # Turn for specified duration
                     self.servo.center()  # Center steering
                     self.motor.stop()
 
