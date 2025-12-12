@@ -388,7 +388,7 @@ class BinDieselSystem:
         conditional_log(self.logger, 'info', "STOPPED: Waiting for trash collection", config.DEBUG_MODE)
         self.sleeptimer = config.SLEEP_TIMER  # reset sleep timer
 
-        wait_time = 8.0  # Wait 10 seconds for trash placement
+        wait_time = 4.0  # Wait 10 seconds for trash placement
         if self.sm.get_time_in_state() > wait_time:
             log_info(self.logger, "Trash collection complete, returning to home")
             self._transition_to(State.HOME)
@@ -452,10 +452,10 @@ class BinDieselSystem:
 
                     self.motor.stop()  # Stop before turning
                     log_info(self.logger, "Stopping BEFORE turning AROUND AFTER REACHING HOME MARKER")
-                    time.sleep(5.0)
+                    time.sleep(2.0)
                     self.servo.turn_left(1.0)  # Max left turn
                     self.motor.forward(config.MOTOR_TURN)
-                    time.sleep(config.TURN_180_DURATION - 0.2)  # Turn for specified duration
+                    time.sleep(config.TURN_180_DURATION - 0.3)  # Turn for specified duration
                     self.servo.center()  # Center steering
                     self.motor.stop()
 
