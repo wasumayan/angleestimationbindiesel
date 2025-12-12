@@ -133,7 +133,7 @@ YOLO_AGNOSTIC_NMS = True  # Class-agnostic NMS (faster, slight accuracy tradeoff
 # - frame skipping: Process every Nth frame
 
 # Debug Configuration
-DEBUG_MODE = False  # Enable debug logging throughout system
+DEBUG_MODE = True  # Enable debug logging throughout system
 DEBUG_VISUAL = True  # Debug visual detection specifically
 DEBUG_MOTOR = True  # Debug motor commands
 DEBUG_SERVO = False  # Debug servo commands
