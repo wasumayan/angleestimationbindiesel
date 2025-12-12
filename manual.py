@@ -44,7 +44,7 @@ class ManualControl:
         try:
             self.motor = MotorController(
                 pwm_pin=config.MOTOR_PWM_PIN,
-                frequency=config.PWM_FREQUENCY_MOTOR
+                frequency=config.PWM_FREQUENCY  # Use PWM_FREQUENCY (alias) to match maincallista
             )
             log_info(logger, "Motor controller initialized")
         except Exception as e:
@@ -149,7 +149,7 @@ class ManualControl:
         # Stop previous command
         self.motor.stop()
         self.servo.center()
-        time.sleep(0.1)  # Brief pause between commands
+        time.sleep(0.15)  # Brief pause between commands (matching maincallista timing)
         
         if command == self.COMMAND_STOP:
             self.stop_all()
@@ -162,21 +162,22 @@ class ManualControl:
         
         elif command == self.COMMAND_LEFT:
             self.servo.turn_left(1.0)  # Full left turn
-            self.motor.forward(config.MOTOR_SLOW)
+            self.motor.forward(config.MOTOR_MEDIUM)  # Updated to match maincallista
             log_info(logger, "Turning left")
         
         elif command == self.COMMAND_RIGHT:
             self.servo.turn_right(1.0)  # Full right turn
-            self.motor.forward(config.MOTOR_SLOW)
+            self.motor.forward(config.MOTOR_MEDIUM)  # Updated to match maincallista
             log_info(logger, "Turning right")
         
         elif command == self.COMMAND_TURN_AROUND:
             # Turn 180 degrees
             log_info(logger, "Turning around...")
             self.motor.stop()
-            self.servo.turn_left(1.0)  # Max left turn
+            time.sleep(1.0)  # Brief pause before turning
+            self.servo.turn_left(0.5)  # Half left turn (matching maincallista)
             self.motor.forward(config.MOTOR_TURN)
-            time.sleep(config.TURN_180_DURATION)  # Turn for specified duration
+            time.sleep(config.TURN_180_DURATION - 0.2)  # Turn for specified duration (matching maincallista)
             self.servo.center()
             self.motor.stop()
             log_info(logger, "Turn around complete")
@@ -235,13 +236,13 @@ class ManualControl:
                     # Keep turning left
                     if not self.emergency_stopped:
                         self.servo.turn_left(1.0)
-                        self.motor.forward(config.MOTOR_SLOW)
+                        self.motor.forward(config.MOTOR_MEDIUM)  # Updated to match maincallista
                 
                 elif self.current_command == self.COMMAND_RIGHT:
                     # Keep turning right
                     if not self.emergency_stopped:
                         self.servo.turn_right(1.0)
-                        self.motor.forward(config.MOTOR_SLOW)
+                        self.motor.forward(config.MOTOR_MEDIUM)  # Updated to match maincallista
                 
                 # Small sleep to prevent CPU spinning
                 time.sleep(0.05)
