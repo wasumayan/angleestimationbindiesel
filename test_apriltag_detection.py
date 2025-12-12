@@ -528,9 +528,9 @@ class ArUcoNavigationTest:
                         
                         # Adjust motor speed based on centering (same logic as main.py)
                         if is_centered:
-                            speed = config.MOTOR_FAST
+                            speed = config.MOTOR_SLOW
                         else:
-                            speed = config.MOTOR_MEDIUM
+                            speed = config.MOTOR_SLOW
                         
                         self.motor.forward(speed)
                         
