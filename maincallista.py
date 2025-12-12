@@ -214,7 +214,7 @@ class BinDieselSystem:
     def handle_idle_state(self):
         """Handle IDLE state - wake word only, no voice recognizer (exclusive mic access)"""
         
-        self.servo.safe_center_servo()
+        self.safe_center_servo()
   
         # Ensure wake word detector is running
         if self._wake_word_stopped: 
