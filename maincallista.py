@@ -428,7 +428,7 @@ class BinDieselSystem:
             if detection['detected']:
                 # Found ArUco marker!
                 self.sleeptimer = config.SLEEP_TIMER  # reset sleep timer
-                
+
                 center_x = detection['center_x']
                 frame_center_x = config.CAMERA_WIDTH // 2
                 offset = center_x - frame_center_x
@@ -485,9 +485,9 @@ class BinDieselSystem:
                 log_info(self.logger, "ArUco marker not found, searching...")
                 # Turn slowly while searching
                 self.motor.forward(config.MOTOR_SUPER_SLOW)
-                # steer opposite of last known error to search
-                self.servo.set_angle(-15.0)  # Slight left turn
-                self.last_error_angle = self.last_error_angle * -1  # Flip for next time
+                sweep_angle = 15.0
+                self.servo.set_angle(sweep_angle)  # Slight left turn
+                sweep_angle = sweep_angle * -1  # Flip for next time
                 time.sleep(self.sleeptimer)
                 if self.sleeptimer < 2.0:
                     self.sleeptimer += 0.1
@@ -514,7 +514,7 @@ class BinDieselSystem:
                 # This ensures immediate emergency stop response
                 if self.tof and self.tof.detect() and state != State.IDLE and state != State.STOPPED:   
                     if state == State.HOME: 
-                        log_info(self.logger, "TRYING TO TURN, PLEASE MOVE AWAY FROM BIN DIESEL")
+                        log_info(self.logger, "PLEASE MOVE AWAY FROM BIN DIESEL")
                         continue  # Skip all other processing this frame
                     log_info(self.logger, "=" * 70)
                     log_info(self.logger, "EMERGENCY STOP: TOF sensor triggered!")
