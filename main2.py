@@ -355,8 +355,8 @@ class BinDieselSystem:
                 result['person_detected'] = False  # Treat as person lost
         
         if not result['person_detected']:
-            # User lost - stop car and revert to tracking state to search for user
-            log_info(self.logger, "User lost during following, going other way...")
+            # User lost - revert to tracking state to search for user and re-identify
+            log_info(self.logger, "User lost during following, reverting to tracking state to re-identify...")
             self.motor.forward(config.MOTOR_SLOW)
             # steer opposite of last known error to search
             self.servo.set_angle(self.last_error_angle * -2)
@@ -366,7 +366,9 @@ class BinDieselSystem:
             time.sleep(self.sleeptimer)
             if self.sleeptimer < 2.0:
                 self.sleeptimer += 0.1
-
+            
+            # Transition back to TRACKING_USER state to re-identify user (arm raised)
+            self._transition_to(State.TRACKING_USER)
             return
         
         # (TOF check now happens at top of run() for immediate emergency response)

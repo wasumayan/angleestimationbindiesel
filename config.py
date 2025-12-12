@@ -42,7 +42,7 @@ SERVO_RIGHT_MAX = 89.318
 # Visual Detection Configuration
 CAMERA_WIDTH = 640
 CAMERA_HEIGHT = 480
-CAMERA_FPS = 30  # Target camera FPS (Raspberry Pi Camera Module 3 Wide supports up to 50 FPS at 640x480)
+CAMERA_FPS = 40  # Target camera FPS (Raspberry Pi Camera Module 3 Wide supports up to 50 FPS at 640x480)
 CAMERA_ROTATION = 180  # Rotate camera 180 degrees (0, 90, 180, 270) - set to 180 if camera is upside down
 CAMERA_FLIP_HORIZONTAL = False  # Flip horizontally (mirror)
 CAMERA_FLIP_VERTICAL = False  # Flip vertically
@@ -102,16 +102,13 @@ TOF_HIGH_COUNT_THRESHOLD = 1  # Number of consecutive HIGH readings required to 
 
 # Home Marker Configuration (for return to home)
 # ArUco Marker Configuration
-ARUCO_TAG_SIZE_M = 0.047  # Physical size of ArUco marker in meters (default: 0.047 = 47mm)
-HOME_MARKER_STOP_DISTANCE_M = 0.3  # Stop when marker is this close in meters (default: 0.3m = 30cm)
+ARUCO_TAG_SIZE_M = 0.2  # Physical size of ArUco marker in meters (default: 0.047 = 47mm)
+HOME_MARKER_STOP_DISTANCE_M = 0.2  # Stop when marker is this close in meters (default: 0.3m = 30cm)
 
 # Legacy YOLO-based detection (deprecated - using ArUco now)
 HOME_MARKER_OBJECT_CLASS = 'box'  # YOLO object class to detect as home marker (deprecated)
 HOME_MARKER_COLOR = 'red'  # Color of home marker (deprecated - using ArUco now)
-HOME_MARKER_CONFIDENCE = 0.3  # Minimum confidence for home marker detection (deprecated)
-HOME_MARKER_COLOR_THRESHOLD = 0.3  # Minimum percentage of object that must match color (deprecated)
 HOME_MARKER_STOP_DISTANCE = 100  # Stop when marker is this many pixels wide (deprecated - use HOME_MARKER_STOP_DISTANCE_M)
-HOME_MARKER_SLOW_DISTANCE = 50
 TURN_180_DURATION = 5.9  # Seconds to turn 180 degrees
 
 SLEEP_TIMER = 0.2
@@ -121,11 +118,11 @@ ENABLE_FRAME_CACHING = True  # Cache frames to reduce redundant captures
 FRAME_CACHE_TTL = 0.05  # Frame cache time-to-live (seconds)
 VISUAL_UPDATE_INTERVAL = 0.033  # Visual detection update interval (seconds) - lower = higher FPS (0.033 = 30 FPS max, 0.05 = 20 FPS max)
 ENABLE_PERFORMANCE_MONITORING = True  # Track FPS and performance metrics
-FRAME_SKIP_INTERVAL = 3  # Process every Nth frame (1 = all frames, 2 = every other, etc.)
+FRAME_SKIP_INTERVAL = 2  # Process every Nth frame (1 = all frames, 2 = every other, etc.)
 
 # YOLO Performance Optimization
 YOLO_INFERENCE_SIZE = 640  # YOLO input image size (matches camera 640x480, no resize needed)
-YOLO_MAX_DET = 10  # Maximum detections per image (lower = faster, default is 300)
+YOLO_MAX_DET = 30  # Maximum detections per image (lower = faster, default is 300)
 YOLO_AGNOSTIC_NMS = True  # Class-agnostic NMS (faster, slight accuracy tradeoff)
 # Note: imgsz resizes internally - doesn't reduce field of view, but resizing has CPU overhead
 # Better to match camera resolution (640) and use other optimizations:
@@ -136,7 +133,7 @@ YOLO_AGNOSTIC_NMS = True  # Class-agnostic NMS (faster, slight accuracy tradeoff
 # Debug Configuration
 DEBUG_MODE = False  # Enable debug logging throughout system
 DEBUG_VISUAL = True  # Debug visual detection specifically
-DEBUG_MOTOR = False  # Debug motor commands
+DEBUG_MOTOR = True  # Debug motor commands
 DEBUG_SERVO = False  # Debug servo commands
 DEBUG_TOF = False  # Debug TOF sensor readings
 DEBUG_VOICE = True  # Debug voice recognition
