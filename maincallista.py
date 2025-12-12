@@ -339,8 +339,6 @@ class BinDieselSystem:
 
             return
         
-        # (TOF check now happens at top of run() for immediate emergency response)
-        
         # Calculate steering based on angle 
         if result['angle'] is not None:
             self.sleeptimer = config.SLEEP_TIMER  # reset sleep timer
@@ -385,6 +383,7 @@ class BinDieselSystem:
         """Handle STOPPED state - at target distance, waiting for trash collection"""
         # Wait for fixed amount of time for trash placement, then go to HOME
         conditional_log(self.logger, 'info', "STOPPED: Waiting for trash collection", config.DEBUG_MODE)
+        self.sleeptimer = config.SLEEP_TIMER  # reset sleep timer
 
         wait_time = 10.0  # Wait 10 seconds for trash placement
         if self.sm.get_time_in_state() > wait_time:
@@ -428,6 +427,8 @@ class BinDieselSystem:
             
             if detection['detected']:
                 # Found ArUco marker!
+                self.sleeptimer = config.SLEEP_TIMER  # reset sleep timer
+
                 center_x = detection['center_x']
                 frame_center_x = config.CAMERA_WIDTH // 2
                 offset = center_x - frame_center_x
@@ -483,8 +484,13 @@ class BinDieselSystem:
                 # Marker not found - search by turning slowly
                 log_info(self.logger, "ArUco marker not found, searching...")
                 # Turn slowly while searching
-                self.servo.turn_left(0.3)  # Small left turn
-                self.motor.forward(config.MOTOR_SLOW)  # Very slow forward
+                self.motor.forward(config.MOTOR_SUPER_SLOW)
+                sweep_angle = 15.0
+                self.servo.set_angle(sweep_angle)  # Slight left turn
+                sweep_angle = sweep_angle * -1  # Flip for next time
+                time.sleep(self.sleeptimer)
+                if self.sleeptimer < 2.0:
+                    self.sleeptimer += 0.1
                 
         except Exception as e:
             log_error(self.logger, e, "Error in return to home detection")
@@ -508,7 +514,7 @@ class BinDieselSystem:
                 # This ensures immediate emergency stop response
                 if self.tof and self.tof.detect() and state != State.IDLE and state != State.STOPPED:   
                     if state == State.HOME: 
-                        log_info(self.logger, "TRYING TO TURN, PLEASE MOVE AWAY FROM BIN DIESEL")
+                        log_info(self.logger, "PLEASE MOVE AWAY FROM BIN DIESEL")
                         continue  # Skip all other processing this frame
                     log_info(self.logger, "=" * 70)
                     log_info(self.logger, "EMERGENCY STOP: TOF sensor triggered!")
