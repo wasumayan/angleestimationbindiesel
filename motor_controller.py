@@ -33,7 +33,7 @@ class MotorController:
         
         # Clamp PWM between 90-100 to prevent inverter from activating reverse
         # when PWM drops below threshold (due to rounding, init, or shutdown)
-        duty = max(80.0, min(100.0, duty))
+        duty = max(70.0, min(100.0, duty))
 
         if config.USE_GPIO:
             self.pwm.ChangeDutyCycle(duty)
