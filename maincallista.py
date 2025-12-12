@@ -548,7 +548,8 @@ class BinDieselSystem:
 
                     if hasattr(self, 'return_turn_complete'):
                         delattr(self, 'return_turn_complete')
-                    self._transition_to(State.IDLE)
+                        self._transition_to(State.IDLE)
+                        time.sleep(0.05)  # Small delay to allow motor to stop
                         continue  # Skip all other processing this frame
                     else:
                         # Other states - normal emergency stop
@@ -562,7 +563,7 @@ class BinDieselSystem:
                         if state in (State.FOLLOWING_USER, State.TRACKING_USER):
                             self._transition_to(State.STOPPED)
                         else: 
-                            state = State.IDLE
+                            self._transition_to(State.IDLE)
                         time.sleep(0.05)  # Small delay to allow motor to stop
                         continue  # Skip all other processing this frame
                 
