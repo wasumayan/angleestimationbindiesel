@@ -519,7 +519,7 @@ class BinDieselSystem:
                 
                 is_turning_in_home = (state == State.HOME and not hasattr(self, 'return_turn_complete'))
                 
-                if self.tof and self.tof.detect() and state != State.IDLE:
+                if self.tof and self.tof.detect() and state != State.IDLE and state != State.STOPPED :
                     # Skip TOF check if we're currently turning in HOME state
                     if is_turning_in_home:
                         log_info(self.logger, "MOVE TURNING!!!!!!")
