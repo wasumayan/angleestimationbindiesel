@@ -14,6 +14,7 @@ class State(Enum):
     ACTIVE = auto()  # Post-wake-word: voice commands and visual detection for mode selection
     TRACKING_USER = auto()
     FOLLOWING_USER = auto()
+    FINDING_LOST_USER = auto()  # User lost during following - searching with pose detection
     STOPPED = auto()  # At target distance, waiting for trash collection
     HOME = auto()  # Returning to home marker (turn 180, detect marker, drive to it)
     MANUAL_MODE = auto()

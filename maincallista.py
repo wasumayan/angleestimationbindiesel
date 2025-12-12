@@ -515,24 +515,44 @@ class BinDieselSystem:
 
                 # SAFETY: Check TOF sensor FIRST before any other processing
                 # This ensures immediate emergency stop response
-                if self.tof and self.tof.detect() and state != State.IDLE and state != State.HOME:   
-                    if state == State.HOME: 
-                        log_info(self.logger, "PLEASE MOVE AWAY FROM BIN DIESEL")
+                # Exception: Don't check TOF during HOME state turn (when return_turn_complete is not set)
+                is_turning_in_home = (state == State.HOME and not hasattr(self, 'return_turn_complete'))
+                
+                if self.tof and self.tof.detect() and state != State.IDLE:
+                    # Skip TOF check if we're currently turning in HOME state
+                    if is_turning_in_home:
+                        log_info(self.logger, "MOVE TURNING!!!!!!")
+                        continue  # Skip TOF check during turn
+                    
+                    # TOF triggered - handle emergency stop
+                    if state == State.HOME:
+                        # In HOME state after turn - stop and return to IDLE
+                        log_info(self.logger, "=" * 70)
+                        log_info(self.logger, "EMERGENCY STOP: TOF sensor triggered in HOME state!")
+                        log_info(self.logger, "Stopping and returning to IDLE")
+                        log_info(self.logger, "=" * 70)
+                        self.motor.stop()
+                        self.servo.center()
+                        if hasattr(self, 'return_turn_complete'):
+                            delattr(self, 'return_turn_complete')
+                        self._transition_to(State.IDLE)
+                        time.sleep(0.05)  # Small delay to allow motor to stop
                         continue  # Skip all other processing this frame
-                    log_info(self.logger, "=" * 70)
-                    log_info(self.logger, "EMERGENCY STOP: TOF sensor triggered!")
-                    log_info(self.logger, "=" * 70)
-                    self.motor.stop()
-                    self.servo.center()
+                    else:
+                        # Other states - normal emergency stop
+                        log_info(self.logger, "=" * 70)
+                        log_info(self.logger, "EMERGENCY STOP: TOF sensor triggered!")
+                        log_info(self.logger, "=" * 70)
+                        self.motor.stop()
+                        self.servo.center()
 
-                    # Transition to STOPPED state if currently in a movement state
-                    if state in (State.FOLLOWING_USER, State.TRACKING_USER):
-                        self._transition_to(State.STOPPED)
-
-                    else: 
-                        state = State.IDLE
-                    time.sleep(0.05)  # Small delay to allow motor to stop
-                    continue  # Skip all other processing this frame
+                        # Transition to STOPPED state if currently in a movement state
+                        if state in (State.FOLLOWING_USER, State.TRACKING_USER):
+                            self._transition_to(State.STOPPED)
+                        else: 
+                            state = State.IDLE
+                        time.sleep(0.05)  # Small delay to allow motor to stop
+                        continue  # Skip all other processing this frame
                 
                 # Update performance monitor
                 self.performance_monitor.update()

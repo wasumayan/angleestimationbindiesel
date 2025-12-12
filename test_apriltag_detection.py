@@ -628,8 +628,8 @@ def main():
                        help='Use webcam instead of Picamera2 (auto-detected if Picamera2 unavailable)')
     parser.add_argument('--camera-index', type=int, default=0,
                        help='Webcam index (default: 0)')
-    parser.add_argument('--rotate', type=int, default=0, choices=[0, 90, 180, 270],
-                       help='Rotate camera feed (0, 90, 180, 270 degrees) - useful if camera is upside down')
+    parser.add_argument('--rotate', type=int, default=None, choices=[0, 90, 180, 270],
+                       help=f'Rotate camera feed (0, 90, 180, 270 degrees) - useful if camera is upside down (default: {config.CAMERA_ROTATION} from config)')
     parser.add_argument('--flip-h', action='store_true',
                        help='Flip camera feed horizontally')
     parser.add_argument('--flip-v', action='store_true',
@@ -638,6 +638,9 @@ def main():
                        help='Show debug info about detection failures')
     
     args = parser.parse_args()
+    
+    # Use config value if rotate not specified
+    rotation = args.rotate if args.rotate is not None else config.CAMERA_ROTATION
     
     print("=" * 70)
     print("ArUco Marker Detection and Navigation Test")
@@ -649,8 +652,8 @@ def main():
     print(f"Camera: {'Webcam' if (args.webcam or not HAS_PICAMERA2) else 'Picamera2'}")
     if args.webcam or not HAS_PICAMERA2:
         print(f"Webcam index: {args.camera_index}")
-    if args.rotate != 0:
-        print(f"Camera rotation: {args.rotate}°")
+    if rotation != 0:
+        print(f"Camera rotation: {rotation}°")
     if args.flip_h:
         print("Horizontal flip: enabled")
     if args.flip_v:
@@ -664,7 +667,7 @@ def main():
         stop_distance_m=args.stop_distance,
         use_webcam=args.webcam or not HAS_PICAMERA2,
         camera_index=args.camera_index,
-        test_rotation=args.rotate,
+        test_rotation=rotation,
         test_flip_horizontal=args.flip_h,
         test_flip_vertical=args.flip_v
     )

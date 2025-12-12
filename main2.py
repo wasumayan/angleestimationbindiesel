@@ -355,20 +355,11 @@ class BinDieselSystem:
                 result['person_detected'] = False  # Treat as person lost
         
         if not result['person_detected']:
-            # User lost - revert to tracking state to search for user and re-identify
-            log_info(self.logger, "User lost during following, reverting to tracking state to re-identify...")
-            self.motor.forward(config.MOTOR_SLOW)
-            # steer opposite of last known error to search
-            self.servo.set_angle(self.last_error_angle * -2)
-            self.last_error_angle = self.last_error_angle * -1  # Flip for next time
+            # User lost - transition to FINDING_LOST_USER state
+            log_info(self.logger, "User lost during following, transitioning to FINDING_LOST_USER state...")
             self.target_track_id = None  # Clear target track_id
             self.use_lightweight_tracker = False  # Switch back to pose tracker for re-identification
-            time.sleep(self.sleeptimer)
-            if self.sleeptimer < 2.0:
-                self.sleeptimer += 0.1
-            
-            # Transition back to TRACKING_USER state to re-identify user (arm raised)
-            self._transition_to(State.TRACKING_USER)
+            self._transition_to(State.FINDING_LOST_USER)
             return
         
         # (TOF check now happens at top of run() for immediate emergency response)
@@ -409,6 +400,65 @@ class BinDieselSystem:
             self.safe_center_servo()
             # self._transition_to(State.TRACKING_USER)
             log_info(self.logger, "No angle data")
+    
+    ################################################################################################################ handle_finding_lost_user_state
+    ############################################################################################################################################
+    
+    def handle_finding_lost_user_state(self):
+        """Handle FINDING_LOST_USER state - searching for lost user with pose detection"""
+        
+        # Initialize state: set slow speed and center servo
+        if not self.sm.old_state == self.sm.state:
+            log_info(self.logger, "Searching for lost user: moving slowly with centered steering...")
+            self.motor.forward(config.MOTOR_SLOW)
+            self.servo.center()
+            self.sm.old_state = self.sm.state
+            # Clear cached results to force fresh detection
+            self.cached_visual_result = None
+            self.cached_visual_timestamp = 0
+        
+        # Use pose detection (not lightweight tracker) to find user with arm raised
+        current_time = time.time()
+        
+        # Frame skipping: only process every Nth frame for better performance
+        self.frame_skip_counter += 1
+        should_update = (self.frame_skip_counter % config.FRAME_SKIP_INTERVAL == 0)
+        
+        if (self.cached_visual_result and 
+            (current_time - self.cached_visual_timestamp) < 0.1):
+            result = self.cached_visual_result
+        elif should_update:
+            # Use pose tracker to detect arm raised (no target_track_id - looking for any user)
+            result = self.visual.update(target_track_id=None)
+            self.cached_visual_result = result
+            self.cached_visual_timestamp = current_time
+        else:
+            # Use cached result if skipping this frame
+            result = self.cached_visual_result if self.cached_visual_result else {
+                'person_detected': False,
+                'arm_raised': False,
+                'angle': None,
+                'is_centered': False,
+                'track_id': None
+            }
+        
+        # Keep moving slowly with centered steering while searching
+        self.motor.forward(config.MOTOR_SLOW)
+        self.servo.center()
+        
+        # Check if user found (arm raised)
+        if result['arm_raised']:
+            # User found! Store their track_id and resume following
+            self.target_track_id = result.get('track_id')
+            log_info(self.logger, f"Lost user found! Track ID: {result.get('track_id', 'N/A')}, "
+                                 f"Angle: {result.get('angle', 'N/A'):.1f}°")
+            conditional_log(self.logger, 'info',
+                          f"User re-identified (Track ID: {self.target_track_id}), resuming following",
+                          config.DEBUG_MODE)
+            # Switch back to lightweight tracker for faster performance
+            self.use_lightweight_tracker = True
+            self.sleeptimer = config.SLEEP_TIMER  # Reset sleep timer
+            self._transition_to(State.FOLLOWING_USER)
     
     ####################################################################################################################### handle_stopped_state
     ############################################################################################################################################
@@ -548,7 +598,7 @@ class BinDieselSystem:
                     self.servo.center()
 
                     # Transition to STOPPED state if currently in a movement state
-                    if state in (State.FOLLOWING_USER, State.TRACKING_USER):
+                    if state in (State.FOLLOWING_USER, State.TRACKING_USER, State.FINDING_LOST_USER):
                         self._transition_to(State.STOPPED)
 
                     else: 
@@ -571,6 +621,9 @@ class BinDieselSystem:
                 
                 elif state == State.FOLLOWING_USER:
                     self.handle_following_user_state()
+                
+                elif state == State.FINDING_LOST_USER:
+                    self.handle_finding_lost_user_state()
                 
                 elif state == State.STOPPED:
                     self.handle_stopped_state()
