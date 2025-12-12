@@ -399,7 +399,7 @@ class BinDieselSystem:
             log_info(self.logger, "Returning to home: Turning 180 degrees...")
             self.motor.forward(config.MOTOR_STOP)  # Stop before turning
             self.servo.turn_left(1.0)  # Max left turn
-            self.motor.forward(config.MOTOR_TURN)
+            self.motor.forward(config.MOTOR_MAX)
             time.sleep(config.TURN_180_DURATION)  # Turn for specified duration
             self.servo.center()  # Center steering
             self.motor.stop()
