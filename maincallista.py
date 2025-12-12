@@ -451,7 +451,8 @@ class BinDieselSystem:
                     log_info(self.logger, f"Reached home marker! Distance: {distance_m:.2f}m < {stop_distance_m}m. Stopping.")
 
                     self.motor.stop()  # Stop before turning
-                    time.sleep(3.0)
+                    log_info(self.logger, "Stopping BEFORE turning AROUND AFTER REACHING HOME MARKER")
+                    time.sleep(5.0)
                     self.servo.turn_left(1.0)  # Max left turn
                     self.motor.forward(config.MOTOR_TURN)
                     time.sleep(config.TURN_180_DURATION)  # Turn for specified duration
