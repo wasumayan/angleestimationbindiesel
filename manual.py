@@ -88,6 +88,8 @@ class ManualControl:
         # Current command state
         self.current_command = self.COMMAND_STOP
         self.running = True
+        self.command_start_time = None  # Track when current command started
+        self.command_duration = 3.0  # Commands run for 3 seconds
         
         # Emergency stop flag
         self.emergency_stopped = False
@@ -136,15 +138,13 @@ class ManualControl:
         self.motor.stop()
         self.servo.center()
         self.current_command = self.COMMAND_STOP
+        self.command_start_time = None  # Clear command timer
     
     def execute_command(self, command):
         """Execute a voice command"""
-        if command == self.current_command:
-            # Same command - continue executing
-            return
-        
         log_info(logger, f"New command: {command}")
         self.current_command = command
+        self.command_start_time = time.time()  # Record when command started
         
         # Stop previous command
         self.motor.stop()
@@ -153,38 +153,41 @@ class ManualControl:
         
         if command == self.COMMAND_STOP:
             self.stop_all()
+            self.command_start_time = None  # No timer for stop command
             log_info(logger, "Stopped")
         
         elif command == self.COMMAND_FORWARD:
             self.servo.center()
             self.motor.forward(config.MOTOR_MEDIUM)
-            log_info(logger, "Moving forward")
+            log_info(logger, "Moving forward for 3 seconds")
         
         elif command == self.COMMAND_LEFT:
             self.servo.turn_left(1.0)  # Full left turn
-            self.motor.forward(config.MOTOR_MEDIUM)  # Updated to match maincallista
-            log_info(logger, "Turning left")
+            self.motor.forward(config.MOTOR_MEDIUM)
+            log_info(logger, "Turning left for 3 seconds")
         
         elif command == self.COMMAND_RIGHT:
             self.servo.turn_right(1.0)  # Full right turn
-            self.motor.forward(config.MOTOR_MEDIUM)  # Updated to match maincallista
-            log_info(logger, "Turning right")
+            self.motor.forward(config.MOTOR_MEDIUM)
+            log_info(logger, "Turning right for 3 seconds")
         
         elif command == self.COMMAND_TURN_AROUND:
-            # Turn 180 degrees
+            # Turn 180 degrees (this is a one-time action, not continuous)
             log_info(logger, "Turning around...")
             self.motor.stop()
             time.sleep(1.0)  # Brief pause before turning
             self.servo.turn_left(0.5)  # Half left turn (matching maincallista)
-            self.motor.forward(config.MOTOR_TURN)
+            self.motor.forward(config.MOTOR_MEDIUM)  # Use MOTOR_MEDIUM instead of MOTOR_TURN
             time.sleep(config.TURN_180_DURATION - 0.2)  # Turn for specified duration (matching maincallista)
             self.servo.center()
             self.motor.stop()
             log_info(logger, "Turn around complete")
             self.current_command = self.COMMAND_STOP  # Reset to stop after turn
+            self.command_start_time = None  # No timer needed
         
         else:
             log_warning(logger, f"Unknown command: {command}", "Ignoring")
+            self.command_start_time = None
     
     def run(self):
         """Main control loop"""
@@ -225,24 +228,27 @@ class ManualControl:
                     
                     last_command_check = current_time
                 
-                # Continue executing current command
-                if self.current_command == self.COMMAND_FORWARD:
-                    # Keep moving forward
-                    if not self.emergency_stopped:
-                        self.motor.forward(config.MOTOR_MEDIUM)
-                        self.servo.center()
+                # Check if current command has exceeded duration
+                if self.command_start_time is not None:
+                    elapsed_time = time.time() - self.command_start_time
+                    if elapsed_time >= self.command_duration:
+                        # Command duration exceeded - stop automatically
+                        log_info(logger, f"Command '{self.current_command}' completed after {self.command_duration} seconds")
+                        self.stop_all()
+                        self.command_start_time = None
                 
-                elif self.current_command == self.COMMAND_LEFT:
-                    # Keep turning left
+                # Continue executing current command (if still active and not stopped)
+                if self.current_command != self.COMMAND_STOP and self.command_start_time is not None:
                     if not self.emergency_stopped:
-                        self.servo.turn_left(1.0)
-                        self.motor.forward(config.MOTOR_MEDIUM)  # Updated to match maincallista
-                
-                elif self.current_command == self.COMMAND_RIGHT:
-                    # Keep turning right
-                    if not self.emergency_stopped:
-                        self.servo.turn_right(1.0)
-                        self.motor.forward(config.MOTOR_MEDIUM)  # Updated to match maincallista
+                        if self.current_command == self.COMMAND_FORWARD:
+                            self.motor.forward(config.MOTOR_MEDIUM)
+                            self.servo.center()
+                        elif self.current_command == self.COMMAND_LEFT:
+                            self.servo.turn_left(1.0)
+                            self.motor.forward(config.MOTOR_MEDIUM)
+                        elif self.current_command == self.COMMAND_RIGHT:
+                            self.servo.turn_right(1.0)
+                            self.motor.forward(config.MOTOR_MEDIUM)
                 
                 # Small sleep to prevent CPU spinning
                 time.sleep(0.05)
@@ -298,8 +304,9 @@ def main():
     print()
     print("Features:")
     print("  - Always listening for commands")
-    print("  - Commands execute continuously until new command issued")
+    print("  - Each command runs for 3 seconds, then automatically stops")
     print("  - Emergency stop when object detected (TOF sensor)")
+    print("  - All motor speeds use MOTOR_MEDIUM")
     print()
     print("Press Ctrl+C to exit")
     print("=" * 70)
