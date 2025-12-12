@@ -512,7 +512,7 @@ class BinDieselSystem:
 
                 # SAFETY: Check TOF sensor FIRST before any other processing
                 # This ensures immediate emergency stop response
-                if self.tof and self.tof.detect() and state != State.IDLE and state != State.STOPPED:   
+                if self.tof and self.tof.detect() and state != State.IDLE:   
                     if state == State.HOME: 
                         log_info(self.logger, "PLEASE MOVE AWAY FROM BIN DIESEL")
                         continue  # Skip all other processing this frame
