@@ -40,29 +40,6 @@ def main():
     motor.forward(0.7)
     time.sleep(3.0)
 
-    print("\nDrive forward")
-    motor.forward(0.6)
-    time.sleep(3.0)
-
-    print("\nDrive forward")
-    motor.forward(0.5)
-    time.sleep(3.0)
-
-    print("\nDrive forward")
-    motor.forward(0.4)
-    time.sleep(3.0)
-
-    print("\nDrive forward")
-    motor.forward(0.3)
-    time.sleep(3.0)
-
-    print("\nDrive forward")
-    motor.forward(0.2)
-    time.sleep(3.0)
-
-    print("\nDrive forward")
-    motor.forward(0.1)
-    time.sleep(3.0)
 
         # Back to center again
     print("Now stop")
