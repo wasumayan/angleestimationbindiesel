@@ -1,0 +1,1164 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{enumitem}
+
+% Page setup
+\geometry{margin=1in}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{Bin Diesel Autonomous System}
+\fancyhead[R]{\thepage}
+\fancyfoot[C]{Final Project Report}
+
+% Color definitions for code highlighting
+\definecolor{codeyellow}{RGB}{255,229,180}
+\definecolor{codeorange}{RGB}{255,215,0}
+\definecolor{codered}{RGB}{255,107,107}
+\definecolor{codeblue}{RGB}{78,205,196}
+\definecolor{codegreen}{RGB}{149,225,211}
+
+% Code listing setup
+\lstset{
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    frame=single,
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    keywordstyle=\color{blue},
+    commentstyle=\color{green!60!black},
+    stringstyle=\color{red},
+    backgroundcolor=\color{gray!10},
+    showspaces=false,
+    showstringspaces=false,
+    tabsize=2
+}
+
+% Title
+\title{\textbf{Bin Diesel: Autonomous User-Following Robotic System}\\
+\large Final Project Report}
+\author{Your Name}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+% Table of Contents
+\newpage
+\tableofcontents
+\newpage
+
+% List of Figures
+\listoffigures
+\newpage
+
+% List of Tables
+\listoftables
+\newpage
+
+% ============================================================================
+% STATEMENT OF OBJECTIVE
+% ============================================================================
+\section{Statement of Objective}
+
+The Bin Diesel system is an autonomous robotic vehicle designed to assist users in waste collection scenarios. The system achieves the following core functionalities:
+
+\begin{enumerate}
+    \item \textbf{Wake Word Activation}: The system activates upon detection of the custom wake word "bin diesel" using low-power, always-on voice detection, enabling hands-free operation.
+    
+    \item \textbf{User Tracking and Following}: Using real-time computer vision (YOLO pose estimation), the system detects, tracks, and follows users with adaptive speed control based on user position relative to the camera frame.
+    
+    \item \textbf{Safe Proximity Control}: A Time-of-Flight (TOF) sensor provides emergency stop functionality, ensuring the vehicle maintains a safe distance (900mm trigger with 100mm buffer) from users and obstacles.
+    
+    \item \textbf{Autonomous Return to Home}: After completing a task, the system autonomously returns to its starting position using ArUco marker detection, enabling repeated operation cycles.
+    
+    \item \textbf{Adaptive Control}: Motor speed and steering adapt dynamically based on system state and user position, providing smooth, efficient navigation.
+\end{enumerate}
+
+The system is designed for real-world deployment with emphasis on energy efficiency, reliability, and safety, making it suitable for practical applications in waste management and similar scenarios.
+
+% ============================================================================
+% OVERVIEW
+% ============================================================================
+\section{Overview}
+
+\subsection{System Workflow}
+
+The Bin Diesel system operates through a state-based workflow that coordinates perception, computation, and actuation modules. The complete workflow is illustrated in Figure~\ref{fig:state_machine} and described below:
+
+\subsubsection{Operational States}
+
+\begin{enumerate}
+    \item \textbf{IDLE}: System waits for wake word detection. No movement, minimal power consumption. Wake word detector runs continuously with low CPU usage.
+    
+    \item \textbf{FOLLOWING\_USER}: After wake word activation, system actively follows the user. YOLO pose tracking provides real-time user position. Motor speed adapts based on user position:
+    \begin{itemize}
+        \item \texttt{MOTOR\_FAST} (1.0): User centered in frame
+        \item \texttt{MOTOR\_MEDIUM} (1.02): User off-center, turning required
+        \item \texttt{MOTOR\_SLOW} (1.05): User lost or no angle data
+    \end{itemize}
+    
+    \item \textbf{STOPPED}: TOF sensor triggers emergency stop when object detected within 900mm. System waits 4 seconds for user interaction (trash collection).
+    
+    \item \textbf{HOME}: System returns to starting position. Performs 180° turn, then uses ArUco marker detection to navigate to home marker. Motor speed adapts based on marker position.
+\end{enumerate}
+
+\subsubsection{Inputs and Computation}
+
+\textbf{Inputs}:
+\begin{itemize}
+    \item Camera frames (640×480, 30 FPS) for visual perception
+    \item Microphone audio for wake word detection
+    \item TOF sensor digital interrupt for obstacle detection
+\end{itemize}
+
+\textbf{Computation}:
+\begin{itemize}
+    \item YOLO pose estimation: Person detection and 17 keypoint extraction
+    \item BYTETracker: Multi-person tracking with persistent IDs
+    \item ArUco marker detection: Home navigation using camera pose estimation
+    \item State machine logic: Coordinates all subsystems
+    \item Adaptive control: Motor speed and steering angle calculation
+\end{itemize}
+
+\textbf{Outputs}:
+\begin{itemize}
+    \item Motor PWM signals (40Hz, variable duty cycle)
+    \item Servo PWM signals (50Hz, variable duty cycle)
+    \item System state transitions and logging
+\end{itemize}
+
+\subsection{System Architecture}
+
+Figure~\ref{fig:system_block} shows the high-level system architecture. The Raspberry Pi serves as the central processing unit, coordinating all subsystems:
+
+\begin{itemize}
+    \item \textbf{Perception Modules}: Camera (PiCamera2), Microphone, TOF sensor (VL53L0X)
+    \item \textbf{Processing}: YOLO pose tracker, ArUco detector, Wake word detector
+    \item \textbf{Control}: State machine, motor controller, servo controller
+    \item \textbf{Communication}: I2C for TOF sensor, GPIO for PWM signals
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{diagrams/system_block_diagram.png}
+    \caption{System Block Diagram showing all hardware components and their interconnections. The Raspberry Pi coordinates perception, computation, and actuation modules.}
+    \label{fig:system_block}
+\end{figure}
+
+\subsection{State Machine}
+
+The state machine (Figure~\ref{fig:state_machine}) manages the operational workflow, ensuring proper sequencing and preventing invalid transitions. State transitions are triggered by:
+
+\begin{itemize}
+    \item Wake word detection: \texttt{IDLE} → \texttt{FOLLOWING\_USER}
+    \item TOF sensor trigger: \texttt{FOLLOWING\_USER} → \texttt{STOPPED}
+    \item Timeout: \texttt{STOPPED} → \texttt{HOME}
+    \item Marker reached: \texttt{HOME} → \texttt{IDLE}
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{diagrams/state_machine_diagram.png}
+    \caption{State Machine Diagram showing all operational states and transitions. Each state has specific motor speed and behavior characteristics.}
+    \label{fig:state_machine}
+\end{figure}
+
+\subsection{Physical Layout}
+
+The physical layout of the Bin Diesel system is shown in Figure~\ref{fig:physical_layout}. Key design considerations:
+
+\begin{itemize}
+    \item \textbf{Camera Position}: Optimized height for user detection at 1-3m distance
+    \item \textbf{Raspberry Pi}: Centrally located for cable management
+    \item \textbf{TOF Sensor}: Front-facing for obstacle detection
+    \item \textbf{Motor/Servo}: Rear-mounted for propulsion and steering
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\textwidth]{diagrams/car_layout_overview.png}
+    \caption{Physical layout of Bin Diesel system showing component placement and cable routing. Camera height optimized for user detection range. \textbf{Note: This is a placeholder diagram. Replace with actual CAD/physical layout photo when available.}}
+    \label{fig:physical_layout}
+\end{figure}
+
+% ============================================================================
+% HARDWARE DESIGN
+% ============================================================================
+\section{Hardware Design}
+
+\subsection{Raspberry Pi}
+
+The Raspberry Pi serves as the central processing unit, running all perception, computation, and control algorithms. Key specifications:
+
+\begin{itemize}
+    \item Model: Raspberry Pi 4/5
+    \item CPU: ARM architecture (optimized for NCNN models)
+    \item GPIO: 40-pin header for PWM and digital I/O
+    \item Camera Interface: CSI for PiCamera2
+    \item Power: 5V via buck converter
+\end{itemize}
+
+\subsubsection{Power Supply and Regulation}
+
+The system uses a buck converter to step down battery voltage to 5V for the Raspberry Pi. Figure~\ref{fig:buck_converter} shows the buck converter implementation.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.6\textwidth]{hardware/buck_converter.jpg}
+    \caption{Buck converter used for power regulation. Steps down battery voltage to stable 5V for Raspberry Pi. Includes filtering capacitors for noise reduction and power stability. \textbf{Note: This is a placeholder image. Replace with actual buck converter photo when available.}}
+    \label{fig:buck_converter}
+\end{figure}
+
+\textbf{Design Rationale}:
+\begin{itemize}
+    \item Buck converter provides efficient voltage regulation (85-90\% efficiency)
+    \item Filtering capacitors reduce voltage ripple and noise
+    \item Prevents voltage fluctuations that could cause system instability
+    \item Enables operation from various battery voltages (7-12V)
+\end{itemize}
+
+\subsection{Motor Control Circuit}
+
+The motor is controlled via a custom inverter circuit that interprets PWM signals from the Raspberry Pi. Figure~\ref{fig:motor_inverter} shows the complete circuit diagram.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{hardware/motor_inverter_circuit.png}
+    \caption{Motor inverter circuit with PWM signal conditioning. Resistors provide current limiting and voltage division. Capacitors filter PWM signal and reduce noise. \textbf{Note: This is a placeholder diagram. Replace with actual circuit diagram (KiCad/CircuitLab export) when available.}}
+    \label{fig:motor_inverter}
+\end{figure}
+
+\subsubsection{Circuit Design Choices}
+
+\textbf{Resistors}:
+\begin{itemize}
+    \item \textbf{Current Limiting}: Prevents damage to GPIO pin and inverter input
+    \item \textbf{Voltage Division}: Conditions PWM signal to match inverter input impedance
+    \item \textbf{Values Selected}: Based on inverter input characteristics and signal conditioning requirements
+\end{itemize}
+
+\textbf{Capacitors}:
+\begin{itemize}
+    \item \textbf{Filtering}: Smooth PWM signal, reduce high-frequency noise
+    \item \textbf{Time Constants}: Chosen to filter 40Hz PWM frequency effectively
+    \item \textbf{Power Stability}: Prevent voltage fluctuations that could cause motor jitter
+    \item \textbf{Decoupling}: Isolate motor power supply from control signals
+\end{itemize}
+
+\textbf{PWM Frequency}: 40Hz chosen to match inverter circuit characteristics:
+\begin{itemize}
+    \item Lower frequencies (20-30Hz) cause motor jitter
+    \item Higher frequencies (50-60Hz) cause inverter heating
+    \item 40Hz provides smooth control with minimal heating
+\end{itemize}
+
+\textbf{Duty Cycle Range}: 65-100\% to prevent reverse activation:
+\begin{itemize}
+    \item Inverter interprets <65\% duty cycle as reverse direction
+    \item Clamping ensures forward-only operation
+    \item \texttt{MOTOR\_STOP} = 100\% (inverter interprets as stop)
+    \item \texttt{MOTOR\_MAX} = 76\% (maximum forward speed)
+\end{itemize}
+
+\subsection{Servo Control}
+
+The steering servo is controlled via standard PWM signals at 50Hz frequency. This is the standard frequency for RC servo motors (20ms period).
+
+\textbf{Duty Cycle Mapping}:
+\begin{itemize}
+    \item Center: 92.600\% (0° steering)
+    \item Left Maximum: 95.422\% (-45° steering)
+    \item Right Maximum: 89.318\% (+45° steering)
+    \item Linear mapping: $\theta = \frac{D - D_{center}}{D_{max} - D_{center}} \times 45°$
+\end{itemize}
+
+\subsection{TOF Sensor (VL53L0X)}
+
+The VL53L0X Time-of-Flight sensor provides obstacle detection and emergency stop functionality.
+
+\subsubsection{I2C Communication}
+
+\textbf{Why I2C?} We chose I2C over SPI or analog interfaces for several reasons:
+
+\begin{itemize}
+    \item \textbf{Lower Pin Count}: I2C requires only 2 wires (SDA, SCL) vs SPI's 4+ wires
+    \item \textbf{Addressable Devices}: Multiple I2C devices can share the same bus
+    \item \textbf{Standard Protocol}: Excellent library support and documentation
+    \item \textbf{GPIO Constraints}: Important for Raspberry Pi with limited GPIO pins
+    \item \textbf{Trade-off}: Slightly slower than SPI (~1ms read time) but sufficient for our use case
+\end{itemize}
+
+\textbf{Implementation}:
+\begin{itemize}
+    \item VL53L0X communicates via I2C at 400kHz
+    \item Digital interrupt pin provides immediate obstacle detection
+    \item Hardware threshold configured to 900mm on sensor
+    \item GPIO digital input reads interrupt pin (HIGH = obstacle detected)
+\end{itemize}
+
+\subsubsection{Safety Distance Justification}
+
+The 900mm safety trigger distance was chosen to provide approximately 100mm buffer after accounting for:
+
+\begin{itemize}
+    \item \textbf{Reaction Time}: ~50ms at \texttt{MOTOR\_MEDIUM} speed
+    \item \textbf{Braking Distance}: Proportional to speed and deceleration rate
+    \item \textbf{System Latency}: Control loop processing time (~10ms)
+\end{itemize}
+
+Figure~\ref{fig:tof_safety} shows the analysis of safety trigger distance vs stopping distance, verifying that 900mm provides the desired 100mm buffer.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{data/tof_safety_trigger_analysis.png}
+    \caption{TOF Safety Trigger Analysis. Left: Trigger distance vs stopping distance. Right: Safety buffer at different trigger distances. 900mm chosen to provide ~100mm buffer in all cases.}
+    \label{fig:tof_safety}
+\end{figure}
+
+\subsubsection{TOF Sensor Integration}
+
+The TOF sensor is integrated into the main control loop as follows:
+
+\begin{itemize}
+    \item \textbf{Check Frequency}: Every control loop iteration (~10ms)
+    \item \textbf{Digital Input}: GPIO pin reads interrupt signal
+    \item \textbf{Debouncing}: Requires consecutive HIGH readings to prevent false triggers
+    \item \textbf{Emergency Stop}: When triggered, immediately stops motor and centers servo
+    \item \textbf{State Handling}: Disabled during 180° turn in HOME state (prevents false triggers)
+\end{itemize}
+
+\subsection{Mechanical Design}
+
+Figure~\ref{fig:cad_drawing} shows the CAD rendering of the Bin Diesel chassis with component annotations.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{hardware/cad_drawing.png}
+    \caption{CAD rendering of Bin Diesel chassis showing component placement, mounting points, and cable routing. Dimensions and annotations included. \textbf{Note: This is a placeholder diagram. Replace with actual CAD drawing export when available.}}
+    \label{fig:cad_drawing}
+\end{figure}
+
+\textbf{Design Considerations}:
+\begin{itemize}
+    \item \textbf{Camera Height}: Optimized for user detection at 1-3m distance
+    \item \textbf{Component Placement}: Balanced weight distribution
+    \item \textbf{Cable Management}: Organized routing to prevent interference
+    \item \textbf{Mounting}: Secure fastening for all components
+\end{itemize}
+
+% ============================================================================
+% SOFTWARE IMPLEMENTATION
+% ============================================================================
+\section{Software Implementation}
+
+\subsection{Wake Word Detection}
+
+\subsubsection{Training and Implementation}
+
+The wake word "bin diesel" was trained using the Picovoice Porcupine platform, which provides:
+
+\begin{itemize}
+    \item Custom wake word model generation
+    \item ARM architecture optimization (Raspberry Pi)
+    \item Low-power, always-on detection capability
+    \item Model format: \texttt{.ppn} (Porcupine model file)
+\end{itemize}
+
+\textbf{Training Process}:
+\begin{enumerate}
+    \item Wake word phrase submitted to Picovoice platform
+    \item Model generated and optimized for target platform (Raspberry Pi)
+    \item Model downloaded and integrated into system
+    \item Continuous listening with minimal CPU usage (~5\%)
+\end{enumerate}
+
+\subsubsection{Why Wake Word Instead of Continuous Recognition?}
+
+We chose wake word detection over continuous voice recognition for several critical reasons:
+
+\begin{itemize}
+    \item \textbf{Energy Efficiency}: Wake word detection runs continuously with only ~5\% CPU usage, enabling always-on operation without draining battery
+    \item \textbf{Real-World Application}: Mimics commercial smart devices (Alexa, Google Home) that use wake words for activation
+    \item \textbf{Performance}: Alternative continuous voice recognition would require 20-30\% CPU constantly, making it impractical for battery-powered operation
+    \item \textbf{Reliability}: Wake word provides clear activation signal, reducing false positives
+    \item \textbf{Low-Power Design}: Essential for real-world deployment scenarios
+\end{itemize}
+
+\subsection{Visual Perception}
+
+\subsubsection{YOLO Pose Tracking}
+
+The system uses YOLO11 pose estimation model for real-time person detection and tracking.
+
+\textbf{Model Choice: NCNN vs PyTorch}
+
+We converted from PyTorch (`.pt`) to NCNN format (`.ncnn`) to address frame rate latency issues:
+
+\begin{itemize}
+    \item \textbf{Initial Problem}: PyTorch models achieved ~100ms inference time → 10 FPS max (insufficient for smooth tracking)
+    \item \textbf{Solution}: NCNN format optimized for ARM architecture
+    \item \textbf{Performance Improvement}: 40ms inference time → 30 FPS (3x improvement)
+    \item \textbf{Trade-off}: Requires model conversion step, but essential for real-time operation
+    \item \textbf{Memory}: Lower memory footprint for resource-constrained devices
+\end{itemize}
+
+\textbf{Inference Time Comparison}:
+\begin{table}[H]
+    \centering
+    \begin{tabular}{lcc}
+        \toprule
+        Model Format & Inference Time & Max FPS \\
+        \midrule
+        PyTorch (.pt) & ~100ms & 10 FPS \\
+        NCNN (.ncnn) & ~40ms & 30 FPS \\
+        \bottomrule
+    \end{tabular}
+    \caption{Inference time comparison: PyTorch vs NCNN on Raspberry Pi}
+    \label{tab:yolo_inference}
+\end{table}
+
+\textbf{Features}:
+\begin{itemize}
+    \item Person detection with 17 keypoint extraction
+    \item BYTETracker for multi-person tracking with persistent IDs
+    \item Arm angle detection (60-90° range) for user activation
+    \item Real-time processing at 30 FPS (with frame skipping)
+\end{itemize}
+
+\subsubsection{ArUco Marker Detection}
+
+\paragraph{Design Decision: ArUco vs AprilTag}
+
+We chose ArUco markers over AprilTag for home navigation based on comprehensive testing and analysis:
+
+\textbf{Why ArUco?}
+\begin{itemize}
+    \item \textbf{Robustness}: Better handling of perspective distortion (tilted markers)
+    \item \textbf{Reliability}: More consistent detection in varied lighting conditions
+    \item \textbf{Integration}: Built into OpenCV (no external dependencies)
+    \item \textbf{Tilted Marker Performance}: 90\% detection rate vs 75\% for AprilTag
+\end{itemize}
+
+\textbf{Trade-off}:
+\begin{itemize}
+    \item Slightly higher latency (~20ms vs ~15ms for AprilTag)
+    \item Worth the trade-off for superior reliability, especially for tilted markers
+\end{itemize}
+
+Figure~\ref{fig:aruco_comparison} shows the performance comparison between AprilTag and ArUco across different scenarios.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{data/apriltag_vs_aruco_comparison.png}
+    \caption{AprilTag vs ArUco Performance Comparison. Left: Inference latency across scenarios. Right: Detection rate reliability. ArUco shows more consistent performance, especially for tilted markers (90\% vs 75\%).}
+    \label{fig:aruco_comparison}
+\end{figure}
+
+\textbf{Implementation}:
+\begin{itemize}
+    \item Dictionary: \texttt{DICT\_6X6\_250} (6×6 grid, 250 markers)
+    \item Tag size: 47mm (0.047m) for distance estimation
+    \item Camera pose estimation using camera intrinsics
+    \item Distance and angle calculation for navigation
+\end{itemize}
+
+\subsection{Performance Optimizations}
+
+\subsubsection{Frame Skipping}
+
+To maintain 30 FPS camera capture while processing at manageable CPU load:
+
+\begin{itemize}
+    \item \textbf{Strategy}: Process every 3rd frame (\texttt{FRAME\_SKIP\_INTERVAL = 3})
+    \item \textbf{Result}: 66\% CPU reduction while maintaining 10 FPS visual updates
+    \item \textbf{Rationale}: Visual tracking doesn't require 30 FPS processing; 10 FPS is sufficient for smooth following
+\end{itemize}
+
+\subsubsection{Frame Caching}
+
+\begin{itemize}
+    \item \textbf{Purpose}: Prevent redundant frame captures when multiple modules need the same frame
+    \item \textbf{TTL}: 50ms cache time-to-live (matches frame rate)
+    \item \textbf{Benefit}: Reduces camera access overhead
+\end{itemize}
+
+\subsubsection{Camera Resolution}
+
+\begin{itemize}
+    \item \textbf{Initial}: 1280×720 (too high, caused frame drops)
+    \item \textbf{Final}: 640×480 (optimal balance of quality and performance)
+    \item \textbf{Impact}: 75\% reduction in processing load while maintaining detection accuracy
+\end{itemize}
+
+\subsection{Codebase Architecture}
+
+The codebase is organized into modular components with clear separation of concerns. Figure~\ref{fig:codebase_arch} shows the architecture with color coding:
+
+\begin{itemize}
+    \item \textbf{Yellow}: Main Control System \& ArUco Detection
+    \item \textbf{Orange}: YOLO Pose Tracking
+    \item \textbf{Red}: Hardware Controllers (Motor, Servo, TOF)
+    \item \textbf{Blue}: Computation Modules (State Machine, Optimizations)
+    \item \textbf{Green}: Configuration
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{diagrams/codebase_architecture_diagram.png}
+    \caption{Codebase Architecture (Color-Coded). Shows modular organization: Perception modules (Yellow/Orange), Hardware controllers (Red), Computation (Blue), Configuration (Green).}
+    \label{fig:codebase_arch}
+\end{figure}
+
+\subsubsection{Module Organization}
+
+\textbf{Perception and Input Modules}:
+\begin{itemize}
+    \item Wake Word Detector: Low-power activation
+    \item YOLO Pose Tracker: Person detection and tracking
+    \item ArUco Detector: Home marker navigation
+\end{itemize}
+
+\textbf{Computation Modules}:
+\begin{itemize}
+    \item State Machine: Workflow coordination
+    \item Performance Optimizations: Frame caching, skipping
+    \item Adaptive Control: Speed and steering calculation
+\end{itemize}
+
+\textbf{Hardware Controllers}:
+\begin{itemize}
+    \item Motor Controller: PWM speed control
+    \item Servo Controller: PWM steering control
+    \item TOF Sensor: I2C obstacle detection
+\end{itemize}
+
+% ============================================================================
+% DATA AND RESULTS
+% ============================================================================
+\section{Data and Results}
+
+\subsection{Wake Word Detection}
+
+Figure~\ref{fig:wake_word_distance} shows the wake word detection performance as a function of distance from the microphone.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{data/wake_word_distance_graph.png}
+    \caption{Wake Word Detection Performance vs Distance. Optimal detection distance: ~1.5m. Detection rate >90\% between 0.5m and 3.0m. Performance degrades significantly beyond 3.5m.}
+    \label{fig:wake_word_distance}
+\end{figure}
+
+\textbf{Key Findings}:
+\begin{itemize}
+    \item Optimal detection distance: 1.5m
+    \item Working range: 0.5m to 3.0m with >90\% detection rate
+    \item System demonstrates reliable operation within expected range
+\end{itemize}
+
+\subsection{Pose Detection and Tracking}
+
+The YOLO pose tracker provides real-time person detection with tracking IDs. Figure~\ref{fig:pose_detection} shows example output with command line information.
+
+\textbf{Output Format}:
+\begin{verbatim}
+Person detected: Track ID 1
+Angle: 15.3°
+Centered: False
+Arm raised: True
+\end{verbatim}
+
+This output is parsed and sent to the servo controller:
+\begin{itemize}
+    \item Angle value directly maps to steering angle (-45° to +45°)
+    \item Track ID ensures we follow the same person
+    \item Centered flag determines motor speed (FAST if centered, MEDIUM if not)
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\textwidth]{data/pose_detection_screenshot.png}
+    \caption{YOLO Pose Detection Output. Shows detected person with keypoints, track ID, and calculated angle. This information is parsed and used for steering control. \textbf{Note: This is a placeholder image. Replace with actual YOLO detection screenshot when available.}}
+    \label{fig:pose_detection}
+\end{figure}
+
+\subsection{TOF Sensor Reliability}
+
+The TOF sensor safety trigger analysis (Figure~\ref{fig:tof_safety}) verifies that 900mm trigger distance provides the desired 100mm safety buffer.
+
+\textbf{Analysis Results}:
+\begin{itemize}
+    \item 900mm trigger distance chosen as optimal
+    \item Provides consistent ~100mm buffer after reaction time and braking
+    \item Verified through testing across different speeds
+    \item Safety margin maintained in all operational scenarios
+\end{itemize}
+
+\subsection{PWM Signal Analysis}
+
+Figure~\ref{fig:pwm_traces} shows the PWM signals used for motor and servo control.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{data/pwm_traces.png}
+    \caption{PWM Signals for Motor (40Hz) and Servo (50Hz) Control. Top: Motor PWM at 76\% duty cycle (MOTOR\_MAX). Bottom: Servo PWM at 92.6\% duty cycle (centered position). Demonstrates inverter operation and signal characteristics.}
+    \label{fig:pwm_traces}
+\end{figure}
+
+\textbf{Observations}:
+\begin{itemize}
+    \item Motor PWM: 40Hz frequency, duty cycle varies 65-100\%
+    \item Servo PWM: 50Hz frequency, duty cycle varies 89-95\%
+    \item Signals demonstrate proper inverter operation
+    \item Duty cycle directly proportional to motor/servo output
+\end{itemize}
+
+\subsection{Steering Correction Path Efficiency}
+
+Figure~\ref{fig:steering_correction} shows the analysis of steering correction path efficiency.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{data/steering_correction_path.png}
+    \caption{Steering Correction Path Efficiency Analysis. Left: Corrective path vs direct path (ideal). Right: PWM updates (steering angle) over time. Path efficiency: 1.077 (close to ideal 1.0). Sweep algorithm tuned to optimize this ratio.}
+    \label{fig:steering_correction}
+\end{figure}
+
+\textbf{Efficiency Metric}:
+\begin{equation}
+\text{Efficiency} = \frac{\text{Direct Distance}}{\text{Actual Path Distance}}
+\end{equation}
+
+\textbf{Results}:
+\begin{itemize}
+    \item Path efficiency: 1.077 (target: as close to 1.0 as possible)
+    \item Indicates efficient navigation with minimal unnecessary movement
+    \item Sweep algorithm tuned to optimize this ratio
+    \item PWM updates show smooth steering adjustments
+\end{itemize}
+
+\subsection{Motor Speed Selection by State}
+
+Table~\ref{tab:motor_speeds} summarizes how motor speed adapts based on system state and user position.
+
+\begin{table}[H]
+    \centering
+    \begin{tabular}{lccp{6cm}}
+        \toprule
+        State & Condition & Speed & Reason \\
+        \midrule
+        IDLE & - & STOPPED & No movement, waiting for wake word \\
+        FOLLOWING\_USER & User centered & MOTOR\_FAST (1.0) & Optimal following speed \\
+        FOLLOWING\_USER & User off-center & MOTOR\_MEDIUM (1.02) & Slower while turning \\
+        FOLLOWING\_USER & User lost & MOTOR\_SLOW (1.05) & Careful searching \\
+        HOME & Searching marker & MOTOR\_MEDIUM (1.02) & Searching for ArUco marker \\
+        HOME & Marker centered & MOTOR\_MEDIUM (1.02) & Approaching marker \\
+        HOME & Marker off-center & MOTOR\_SLOW (1.05) & Careful approach \\
+        HOME & Turning 180° & MOTOR\_TURN (0.91) & Special speed for turning \\
+        \bottomrule
+    \end{tabular}
+    \caption{Motor Speed Selection Based on State and User Position}
+    \label{tab:motor_speeds}
+\end{table}
+
+% ============================================================================
+% CHALLENGES AND DESIGN CHOICES
+% ============================================================================
+\section{Challenges and Design Choices}
+
+\subsection{TDOA Limitation}
+
+\textbf{Challenge}: We initially considered Time Difference of Arrival (TDOA) for direction finding.
+
+\textbf{Limitation}: Our microphone only supports mono input (single channel), while TDOA requires stereo input (2+ microphones) to calculate direction based on time differences.
+
+\textbf{Solution}: 
+\begin{itemize}
+    \item Wake word detection provides activation without direction finding
+    \item Direction finding handled by computer vision (YOLO pose tracking)
+    \item This approach is more reliable and doesn't require multiple microphones
+\end{itemize}
+
+\subsection{Model Format Conversion: .pt to .ncnn}
+
+\textbf{Challenge}: Initial implementation used PyTorch models (`.pt` format), achieving only ~100ms inference time → 10 FPS max, insufficient for smooth real-time tracking.
+
+\textbf{Solution}: Converted models to NCNN format (`.ncnn`):
+\begin{itemize}
+    \item NCNN optimized for ARM architecture (Raspberry Pi)
+    \item Inference time reduced to ~40ms → 30 FPS
+    \item 3x performance improvement enables real-time operation
+    \item Trade-off: Requires model conversion step, but essential for performance
+\end{itemize}
+
+\textbf{Impact}: This change was critical for achieving real-time operation. Without NCNN conversion, the system would be too slow for practical use.
+
+\subsection{Camera Resolution and Frame Skipping}
+
+\textbf{Challenge}: Initial camera resolution (1280×720) caused frame drops and high CPU load.
+
+\textbf{Solutions Implemented}:
+\begin{enumerate}
+    \item \textbf{Resolution Reduction}: Changed to 640×480
+    \begin{itemize}
+        \item 75\% reduction in processing load
+        \item Maintained detection accuracy
+        \item Eliminated frame drops
+    \end{itemize}
+    
+    \item \textbf{Frame Skipping}: Process every 3rd frame
+    \begin{itemize}
+        \item 66\% CPU reduction
+        \item Maintains 10 FPS visual updates (sufficient for tracking)
+        \item Camera still captures at 30 FPS
+    \end{itemize}
+    
+    \item \textbf{Frame Caching}: 50ms cache prevents redundant captures
+\end{enumerate}
+
+\subsection{Camera Height Challenges}
+
+\textbf{Challenge}: Camera positioning was critical for user detection performance.
+
+\textbf{Issues Encountered}:
+\begin{itemize}
+    \item Too low: Limited field of view, users out of frame
+    \item Too high: Perspective distortion, inaccurate angle calculations
+\end{itemize}
+
+\textbf{Solution}: Optimized camera height for user detection at 1-3m distance:
+\begin{itemize}
+    \item Careful placement of Pi and camera in chassis
+    \item Testing to find optimal height
+    \item Final positioning provides reliable detection in operational range
+\end{itemize}
+
+\subsection{Natural Language Voice Control}
+
+\textbf{Current Implementation}: We have implemented an elementary version of natural language voice control using OpenAI GPT API. The code exists in \texttt{voice\_recognizer.py} and successfully recognizes commands: forward, left, right, stop.
+
+\textbf{Current Limitation}: Difficult for continuous commands due to wheel and motor noise. Background noise from wheels and motor interferes with microphone input, making continuous command recognition unreliable.
+
+\textbf{Next Steps}:
+\begin{itemize}
+    \item Analyze frequency spectrum of motor and wheel sounds
+    \item Implement bandpass filtering to remove noise frequencies
+    \item Consider directional microphone or noise-canceling techniques
+    \item Filter design to isolate voice frequencies from mechanical noise
+\end{itemize}
+
+\subsection{Adaptive Speed and Steering Control}
+
+\textbf{Current Implementation}: Rule-based adaptive speed (MOTOR\_SLOW/MEDIUM/FAST) and proportional steering (angle directly maps to servo position). This works well and provides smooth operation.
+
+\textbf{Future Optimization Opportunity}: This could be modeled as a gradient descent optimization problem. Nesterov Accelerated Gradient (NAG) would be particularly suitable as it would:
+\begin{itemize}
+    \item Reduce oscillations in steering corrections
+    \item Provide smoother transitions between speed levels
+    \item Optimize path efficiency further
+    \item Potentially improve the path efficiency ratio closer to 1.0
+\end{itemize}
+
+However, the current rule-based approach is sufficient for the system's requirements and provides predictable, reliable behavior.
+
+% ============================================================================
+% APPENDIX
+% ============================================================================
+\appendix
+
+% ============================================================================
+% APPENDIX A: SYSTEM DIAGRAMS
+% ============================================================================
+\section{System Diagrams}
+
+\subsection{Complete System Block Diagram}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{diagrams/system_block_diagram.png}
+    \caption{Complete System Block Diagram showing all hardware components, connections, and data flow. The Raspberry Pi coordinates all subsystems through various communication protocols (I2C, GPIO, CSI).}
+    \label{fig:app_system_block}
+\end{figure}
+
+\subsection{Complete State Machine Diagram}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{diagrams/state_machine_diagram.png}
+    \caption{Complete State Machine Diagram with all states, transitions, and transition conditions. Each state has specific motor speed and behavior characteristics as described in the main text.}
+    \label{fig:app_state_machine}
+\end{figure}
+
+\subsection{Codebase Architecture Diagram}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{diagrams/codebase_architecture_diagram.png}
+    \caption{Codebase Architecture Diagram (Color-Coded). Shows modular organization with color coding: Yellow (Main Control \& ArUco), Orange (YOLO Pose Tracking), Red (Hardware Controllers), Blue (Computation), Green (Configuration). This diagram illustrates how all modules connect to the main control system.}
+    \label{fig:app_codebase_arch}
+\end{figure}
+
+% ============================================================================
+% APPENDIX B: MAIN CONTROL SYSTEM
+% ============================================================================
+\section{Main Control System Code}
+
+The main control system (\texttt{main\_control\_system.py}) is the central orchestrator that coordinates all subsystems. It implements the state machine logic, manages state transitions, and calls the appropriate handlers for each state.
+
+\textbf{Key Responsibilities}:
+\begin{itemize}
+    \item Initializes all hardware controllers, perception modules, and computation modules
+    \item Implements state handlers: \texttt{handle\_idle\_state()}, \texttt{handle\_following\_user\_state()}, \texttt{handle\_stopped\_state()}, \texttt{handle\_home\_state()}
+    \item Manages motor speed selection based on state and user position
+    \item Coordinates TOF emergency stop logic
+    \item Implements frame skipping and caching for performance
+    \item Handles graceful shutdown and cleanup
+\end{itemize}
+
+\textbf{Color Coding}: \textcolor{codeyellow}{\textbf{Yellow}} - This matches the main control system color in the architecture diagram.
+
+\textbf{How It Links to Other Modules}:
+\begin{itemize}
+    \item \textcolor{codeyellow}{Yellow sections}: Imports and uses ArUco detector (also yellow) for home navigation
+    \item \textcolor{codeorange}{Orange sections}: Imports and uses YOLO pose tracker and wake word detector
+    \item \textcolor{codered}{Red sections}: Imports and uses motor, servo, and TOF controllers
+    \item \textcolor{codeblue}{Blue sections}: Imports and uses state machine and optimizations
+    \item \textcolor{codegreen}{Green sections}: Imports configuration file for all parameters
+\end{itemize}
+
+\lstinputlisting[language=Python, backgroundcolor=\color{codeyellow!30}, caption=Main Control System Code with Detailed Comments. This is the central orchestrator that coordinates all subsystems and implements the complete state machine workflow.]{code/main_control_system.py}
+
+% ============================================================================
+% APPENDIX C: HARDWARE CONTROLLERS (BUCKET 1)
+% ============================================================================
+\section{Hardware Controllers (Bucket 1: Hardware Linking)}
+
+The hardware controller modules interface directly with hardware via GPIO and I2C. These modules provide the low-level interface between the Raspberry Pi and physical hardware components.
+
+\textbf{Color Coding}: \textcolor{codered}{\textbf{Red}} - All hardware controllers use red color coding to match the architecture diagram.
+
+\textbf{How They Link to Main Control System}:
+\begin{itemize}
+    \item Main control system imports: \texttt{from motor\_controller import MotorController}
+    \item Main control system imports: \texttt{from servo\_controller import ServoController}
+    \item Main control system imports: \texttt{from tof\_sensor import ToFSensor}
+    \item These modules are instantiated in \texttt{\_\_init\_\_()} and used throughout state handlers
+    \item Motor speed and servo angle are set based on state machine logic
+\end{itemize}
+
+\subsection{Motor Controller}
+
+The motor controller manages PWM signals for motor speed control. It interfaces with the custom inverter circuit, handling duty cycle clamping to prevent reverse activation.
+
+\textbf{Key Features}:
+\begin{itemize}
+    \item PWM frequency: 40Hz (optimized for inverter circuit)
+    \item Duty cycle range: 65-100\% (prevents reverse activation)
+    \item Speed multipliers: MOTOR\_SLOW (1.05), MOTOR\_MEDIUM (1.02), MOTOR\_FAST (1.0), MOTOR\_TURN (0.91)
+    \item Inverter circuit interface with filtering components
+\end{itemize}
+
+\lstinputlisting[language=Python, backgroundcolor=\color{codered!30}, caption=Motor Controller: PWM speed control with inverter circuit interface. Handles duty cycle clamping and speed multiplier calculations.]{code/hardware_controllers/motor_controller.py}
+
+\subsection{Servo Controller}
+
+The servo controller manages PWM signals for steering control. It provides precise angular control with ±45° range.
+
+\textbf{Key Features}:
+\begin{itemize}
+    \item PWM frequency: 50Hz (standard for RC servo motors)
+    \item Duty cycle mapping: 89.318\% to 95.422\% for ±45° steering
+    \item Linear angle-to-duty-cycle conversion
+    \item Angle clamping for safety
+\end{itemize}
+
+\lstinputlisting[language=Python, backgroundcolor=\color{codered!30}, caption=Servo Controller: PWM steering control with ±45° range. Provides precise angular control for vehicle navigation.]{code/hardware_controllers/servo_controller.py}
+
+\subsection{TOF Sensor}
+
+The TOF sensor module interfaces with the VL53L0X sensor via I2C communication. It provides digital interrupt-based obstacle detection.
+
+\textbf{Key Features}:
+\begin{itemize}
+    \item I2C communication (400kHz)
+    \item Digital interrupt pin reading via GPIO
+    \item Debouncing to prevent false triggers
+    \item Pull-down resistor configuration for noise filtering
+    \item 900mm safety trigger distance
+\end{itemize}
+
+\lstinputlisting[language=Python, backgroundcolor=\color{codered!30}, caption=TOF Sensor: I2C communication and digital interrupt handling. Provides emergency stop functionality with 900mm safety distance.]{code/hardware_controllers/tof_sensor.py}
+
+% ============================================================================
+% APPENDIX D: CONFIGURATION (BUCKET 2)
+% ============================================================================
+\section{Configuration File (Bucket 2: Hardware + Software + Optimization)}
+
+The configuration file centralizes all system parameters, making it easy to tune the system without modifying code. It contains hardware settings, software parameters, and optimization configurations.
+
+\textbf{Color Coding}: \textcolor{codegreen}{\textbf{Green}} - Configuration uses green color coding.
+
+\textbf{How It Links to Main Control System}:
+\begin{itemize}
+    \item Main control system imports: \texttt{import config}
+    \item All parameters accessed via \texttt{config.PARAMETER\_NAME}
+    \item Used throughout all modules for consistent configuration
+    \item Enables easy tuning of motor speeds, PWM frequencies, camera settings, etc.
+\end{itemize}
+
+\textbf{Configuration Sections}:
+\begin{itemize}
+    \item GPIO Pin Assignments: Motor, Servo, TOF pins
+    \item Motor Control: PWM frequencies, duty cycles, speed values
+    \item Servo Control: PWM frequency, duty cycle ranges
+    \item Visual Detection: Camera settings, YOLO model paths
+    \item Safety Configuration: TOF thresholds, emergency stop settings
+    \item Performance: Frame skipping, caching, optimization settings
+\end{itemize}
+
+\lstinputlisting[language=Python, backgroundcolor=\color{codegreen!30}, caption=Configuration File: Hardware, Software, and Optimization Settings. Centralizes all system parameters for easy tuning and maintenance.]{code/configuration/config.py}
+
+% ============================================================================
+% APPENDIX E: PERCEPTION MODULES (BUCKET 3 - PART 1)
+% ============================================================================
+\section{Perception Modules (Bucket 3: Modular Code Linking to State Machine)}
+
+The perception modules handle all input processing: wake word detection, person tracking, and home marker detection. These modules are called by the main control system during state machine execution.
+
+\textbf{Color Coding}: 
+\begin{itemize}
+    \item \textcolor{codeyellow}{\textbf{Yellow}}: ArUco Detector (matches main control system)
+    \item \textcolor{codeorange}{\textbf{Orange}}: Wake Word Detector and YOLO Pose Tracker
+\end{itemize}
+
+\textbf{How They Link to Main Control System}:
+\begin{itemize}
+    \item Main control system imports: \texttt{from wake\_word\_detector import WakeWordDetector}
+    \item Main control system imports: \texttt{from test\_yolo\_pose\_tracking import YOLOPoseTracker}
+    \item Main control system imports: \texttt{from test\_apriltag\_detection import ArUcoDetector}
+    \item Wake word used in \texttt{handle\_idle\_state()} for activation
+    \item YOLO tracker used in \texttt{handle\_following\_user\_state()} for user tracking
+    \item ArUco detector used in \texttt{handle\_home\_state()} for home navigation
+\end{itemize}
+
+\subsection{Wake Word Detector}
+
+The wake word detector provides low-power, always-on activation using Picovoice Porcupine. It runs continuously in IDLE state with minimal CPU usage.
+
+\textbf{Key Features}:
+\begin{itemize}
+    \item Custom wake word model: "bin diesel"
+    \item ARM architecture optimization (Raspberry Pi)
+    \item Low CPU usage (~5\%) for always-on operation
+    \item PyAudio for microphone input
+    \item Can be stopped/started for state transitions
+\end{itemize}
+
+\textbf{State Machine Integration}:
+\begin{itemize}
+    \item Used in \texttt{handle\_idle\_state()}: Continuously listens for wake word
+    \item When detected: Stops listening, transitions to FOLLOWING\_USER state
+    \item Can be restarted when returning to IDLE state
+\end{itemize}
+
+\lstinputlisting[language=Python, backgroundcolor=\color{codeorange!30}, caption=Wake Word Detector: Low-power activation using Picovoice Porcupine. Provides always-on wake word detection with minimal CPU usage.]{code/perception_modules/wake_word_detector.py}
+
+\subsection{YOLO Pose Tracker}
+
+The YOLO pose tracker provides real-time person detection, pose estimation, and multi-person tracking. It uses NCNN format for ARM optimization.
+
+\textbf{Key Features}:
+\begin{itemize}
+    \item Person detection with 17 keypoint extraction
+    \item BYTETracker for multi-person tracking with persistent IDs
+    \item Arm angle detection (60-90° range) for user activation
+    \item Real-time processing at 30 FPS (with frame skipping)
+    \item NCNN format for ARM optimization (40ms inference time)
+\end{itemize}
+
+\textbf{State Machine Integration}:
+\begin{itemize}
+    \item Used in \texttt{handle\_following\_user\_state()}: Provides user position and angle
+    \item Track ID ensures we follow the same person
+    \item Angle calculation used for steering control
+    \item Centered flag determines motor speed (FAST if centered, MEDIUM if not)
+\end{itemize}
+
+\textbf{Note on Tracking}: The YOLO pose tracker includes both detection (identifying people) and tracking (assigning persistent IDs). These are integrated in the same module but serve different purposes:
+\begin{itemize}
+    \item \textbf{Detection}: Identifies people in frame, extracts keypoints
+    \item \textbf{Tracking}: Assigns track IDs, maintains identity across frames
+\end{itemize}
+
+\lstinputlisting[language=Python, backgroundcolor=\color{codeorange!30}, caption=YOLO Pose Tracker: Person detection, pose estimation, and multi-person tracking. Includes both detection (identifying people) and tracking (persistent IDs) functionality.]{code/perception_modules/yolo_pose_tracker.py}
+
+\subsection{ArUco Detector}
+
+The ArUco detector provides home marker detection and navigation. It uses camera pose estimation to calculate distance and angle to the marker.
+
+\textbf{Key Features}:
+\begin{itemize}
+    \item ArUco marker detection using OpenCV
+    \item Camera pose estimation for distance calculation
+    \item Angle calculation for steering control
+    \item Robust to perspective distortion and lighting variations
+    \item Tag size: 47mm (0.047m) for distance estimation
+\end{itemize}
+
+\textbf{State Machine Integration}:
+\begin{itemize}
+    \item Used in \texttt{handle\_home\_state()}: Detects home marker after 180° turn
+    \item Provides distance and angle for navigation
+    \item Motor speed adapts based on marker position (MEDIUM if centered, SLOW if not)
+    \item When marker reached (< 0.3m): Stops and transitions to IDLE
+\end{itemize}
+
+\textbf{Color Coding}: \textcolor{codeyellow}{\textbf{Yellow}} - Matches main control system color, showing they work together for home navigation.
+
+\lstinputlisting[language=Python, backgroundcolor=\color{codeyellow!30}, caption=ArUco Marker Detector: Home navigation using camera pose estimation. Provides distance and angle calculations for autonomous return to home.]{code/perception_modules/aruco_detector.py}
+
+% ============================================================================
+% APPENDIX F: COMPUTATION MODULES (BUCKET 3 - PART 2)
+% ============================================================================
+\section{Computation Modules (Bucket 3: Modular Code Linking to State Machine)}
+
+The computation modules handle state management, performance optimizations, and utility functions. These modules support the main control system's operation.
+
+\textbf{Color Coding}: \textcolor{codeblue}{\textbf{Blue}} - All computation modules use blue color coding.
+
+\textbf{How They Link to Main Control System}:
+\begin{itemize}
+    \item Main control system imports: \texttt{from state\_machine import StateMachine, State}
+    \item Main control system imports: \texttt{from logger import setup\_logger, log\_error, log\_warning, log\_info, log\_debug}
+    \item Main control system imports: \texttt{from optimizations import FrameCache, PerformanceMonitor, conditional\_log, skip\_frames}
+    \item State machine manages workflow and state transitions
+    \item Logger provides structured logging throughout system
+    \item Optimizations provide performance improvements (frame caching, skipping)
+\end{itemize}
+
+\subsection{State Machine}
+
+The state machine module manages system states and transitions. It tracks time in each state and provides timeout functionality.
+
+\textbf{Key Features}:
+\begin{itemize}
+    \item State definitions: IDLE, FOLLOWING\_USER, STOPPED, HOME, etc.
+    \item State transition tracking
+    \item Time-in-state calculation for timeouts
+    \item Tracking timeout (30 seconds default)
+\end{itemize}
+
+\textbf{State Machine Integration}:
+\begin{itemize}
+    \item Instantiated in main control system \texttt{\_\_init\_\_()}
+    \item Used throughout main control loop to check current state
+    \item \texttt{transition\_to()} method called by main control system
+    \item \texttt{get\_time\_in\_state()} used for timeout checks
+\end{itemize}
+
+\lstinputlisting[language=Python, backgroundcolor=\color{codeblue!30}, caption=State Machine: Workflow coordination and state transitions. Manages all system states and provides timeout functionality.]{code/computation_modules/state_machine.py}
+
+\subsection{Logger Module}
+
+The logger module provides structured logging throughout the system. It enables consistent log formatting and different log levels.
+
+\textbf{Key Features}:
+\begin{itemize}
+    \item Structured logging with timestamps and context
+    \item Multiple log levels: ERROR, WARNING, INFO, DEBUG
+    \item File and console output
+    \item Context information for debugging
+\end{itemize}
+
+\textbf{Usage in Main Control System}:
+\begin{itemize}
+    \item \texttt{log\_info()}: General information logging
+    \item \texttt{log\_error()}: Error logging with exception details
+    \item \texttt{log\_warning()}: Warning messages
+    \item \texttt{log\_debug()}: Debug information (when DEBUG\_MODE enabled)
+\end{itemize}
+
+\lstinputlisting[language=Python, backgroundcolor=\color{codeblue!30}, caption=Logger Module: Structured logging system with multiple log levels and context information.]{code/computation_modules/logger.py}
+
+\subsection{Optimizations Module}
+
+The optimizations module provides performance improvements through frame caching, performance monitoring, and conditional logging.
+
+\textbf{Key Features}:
+\begin{itemize}
+    \item \texttt{FrameCache}: Caches frames for 50ms to prevent redundant captures
+    \item \texttt{PerformanceMonitor}: Tracks FPS and performance metrics
+    \item \texttt{conditional\_log()}: Logs only when debug mode enabled
+    \item \texttt{skip\_frames()}: Frame skipping utility
+\end{itemize}
+
+\textbf{Usage in Main Control System}:
+\begin{itemize}
+    \item \texttt{FrameCache}: Used to cache visual detection results
+    \item \texttt{PerformanceMonitor}: Tracks system performance, logs FPS periodically
+    \item \texttt{conditional\_log()}: Reduces log spam in production mode
+    \item Frame skipping reduces CPU load by 66\%
+\end{itemize}
+
+\lstinputlisting[language=Python, backgroundcolor=\color{codeblue!30}, caption=Optimizations Module: Frame caching, performance monitoring, and conditional logging for system performance improvements.]{code/computation_modules/optimizations.py}
+
+% ============================================================================
+% APPENDIX G: CODE ORGANIZATION SUMMARY
+% ============================================================================
+\section{Code Organization Summary}
+
+This section summarizes how all modules are organized and how they link together.
+
+\subsection{Three-Bucket Organization}
+
+The codebase is organized into three logical "buckets":
+
+\textbf{Bucket 1: Hardware Linking (Controllers)} - \textcolor{codered}{\textbf{Red}}
+\begin{itemize}
+    \item Motor Controller
+    \item Servo Controller
+    \item TOF Sensor
+    \item Direct hardware interface via GPIO and I2C
+\end{itemize}
+
+\textbf{Bucket 2: Configuration} - \textcolor{codegreen}{\textbf{Green}}
+\begin{itemize}
+    \item Configuration File
+    \item Centralizes all hardware, software, and optimization parameters
+\end{itemize}
+
+\textbf{Bucket 3: Modular Code Linking to State Machine} - \textcolor{codeyellow}{\textbf{Yellow}} / \textcolor{codeorange}{\textbf{Orange}} / \textcolor{codeblue}{\textbf{Blue}}
+\begin{itemize}
+    \item \textcolor{codeyellow}{Yellow}: Main Control System, ArUco Detector
+    \item \textcolor{codeorange}{Orange}: Wake Word Detector, YOLO Pose Tracker (Detection + Tracking)
+    \item \textcolor{codeblue}{Blue}: State Machine, Logger, Optimizations
+\end{itemize}
+
+\subsection{Color Coding Consistency}
+
+Throughout the code and documentation, color coding is consistent:
+\begin{itemize}
+    \item \textcolor{codeyellow}{\textbf{Yellow}}: Main Control System and ArUco Detection (work together for home navigation)
+    \item \textcolor{codeorange}{\textbf{Orange}}: YOLO Pose Tracking and Wake Word Detection (perception inputs)
+    \item \textcolor{codered}{\textbf{Red}}: Hardware Controllers (direct hardware interface)
+    \item \textcolor{codeblue}{\textbf{Blue}}: Computation Modules (state management, optimizations)
+    \item \textcolor{codegreen}{\textbf{Green}}: Configuration (centralized parameters)
+\end{itemize}
+
+This color coding makes it easy to understand module relationships and trace code flow through the system.
+
+\end{document}
+
