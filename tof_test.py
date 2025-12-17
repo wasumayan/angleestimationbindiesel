@@ -22,19 +22,19 @@ def main():
             )
     motor.stop() 
     servo.center()
+    flag = 0
 
     time.sleep(1)  # Allow time for initialization
-    start = time.time()
+
     motor.forward(config.MOTOR_FAST)
     print("[ToF Test] Motor started at max speed. Move an object close to the ToF sensor to test detection.")
     try:
         while True:
-            if tof.detect():
+            if tof.detect() and flag == 0:
+                start = time.time()
                 print("[ToF Test] Obstacle detected! Stopping motor.")
                 motor.stop()
-                end = time.time() - start
-                print(f"[ToF Test] Obstacle detected after {end:.2f} seconds.")
-                break
+                flag = 1; 
 
 
 
@@ -42,6 +42,8 @@ def main():
             time.sleep(0.1)  # Check every 0.5 seconds
     except KeyboardInterrupt:
         print("[ToF Test] Stopping test.")
+        end = time.time() - start
+        print(f"[ToF Test] Obstacle detected after {end:.2f} seconds.")
     finally:
         motor.cleanup()
         servo.cleanup()
