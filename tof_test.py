@@ -38,3 +38,6 @@ def main():
     finally:
         motor.cleanup()
         servo.cleanup()
+
+if __name__ == "__main__":
+    main()
