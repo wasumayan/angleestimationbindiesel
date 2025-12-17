@@ -4,7 +4,6 @@ VL53L0X distance sensor for obstacle detection and user proximity
 """
 
 import config
-import time
 from model_GPIO import ModelGPIO
 
 if config.USE_GPIO:

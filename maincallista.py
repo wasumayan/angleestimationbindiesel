@@ -278,11 +278,11 @@ class BinDieselSystem:
         if result['arm_raised']:
             # User has arm raised - store their track_id and start following
             self.target_track_id = result.get('track_id')  # Store the track_id of the person who raised their arm
-            log_info(self.logger, f"Arm raised detected! Track ID: {result.get('track_id', 'N/A')}, "
-                                 f"Angle: {result.get('angle', 'N/A'):.1f}°")
-            conditional_log(self.logger, 'info',
-                          f"User tracking confirmed (Track ID: {self.target_track_id}), starting to follow",
-                          config.DEBUG_MODE)
+            # log_info(self.logger, f"Arm raised detected! Track ID: {result.get('track_id', 'N/A')}, "
+                                 # f"Angle: {result.get('angle', 'N/A'):.1f}°")
+            # conditional_log(self.logger, 'info',
+                        #  f"User tracking confirmed (Track ID: {self.target_track_id}), starting to follow",
+                        #  config.DEBUG_MODE)
             self._transition_to(State.FOLLOWING_USER)
         
     ################################################################################################################ handle_following_user_state

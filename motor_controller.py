@@ -3,7 +3,6 @@ Motor Controller Module
 Controls motor speed using PWM signals via GPIO
 """
 
-import time
 import config
 from model_GPIO import ModelGPIO
 
@@ -48,7 +47,7 @@ class MotorController:
         if config.DEBUG_MOTOR:
             print("[Motor] stop()")
 
-    def cleanup(self):                  # what is cleanup? 
+    def cleanup(self):                   
         if config.USE_GPIO:
             if self.pwm:
                 self.pwm.stop()

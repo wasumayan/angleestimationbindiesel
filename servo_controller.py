@@ -3,7 +3,6 @@ Servo Controller Module
 Controls steering servo using PWM signals via GPIO
 """
 
-import time
 import config
 from model_GPIO import ModelGPIO
 
